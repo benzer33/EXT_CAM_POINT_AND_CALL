@@ -1,0 +1,340 @@
+"""
+MonitoringService — QThread detection pipeline.
+"""
+from __future__ import annotations
+import os, time, cv2, numpy as np
+from datetime import datetime
+
+from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker
+from PyQt5.QtGui  import QImage
+
+from camera.camera_manager        import CameraManager
+from detection.pose_detector      import PoseDetector
+from detection.gesture_classifier import (
+    classify_pose_gesture,
+    draw_skeleton,
+    draw_debug_kp,
+)
+from detection.person_state       import PersonState, GESTURE_ORDER, LOG_COOLDOWN
+from detection.crossing_line      import CrossingLine
+
+
+class MonitoringService(QThread):
+    frame_ready    = pyqtSignal(QImage)
+    stats_updated  = pyqtSignal(dict)
+    crossing_event = pyqtSignal(dict)
+    status_changed = pyqtSignal(str)
+    error_occurred = pyqtSignal(str)
+
+    def __init__(self, cfg: dict, parent=None):
+        super().__init__(parent)
+        self._cfg           = cfg
+        self._running       = False
+        self._mutex         = QMutex()
+        self._crossing_line = CrossingLine()
+        self._counters      = {"total": 0, "pass": 0, "fail": 0, "in_zone": 0}
+        self._person_states: dict[int, PersonState] = {}
+
+        cl_cfg = cfg.get("crossing_line")
+        if cl_cfg:
+            self._crossing_line = CrossingLine.from_dict(cl_cfg)
+
+    # ── public API ────────────────────────────────────────────────────────────
+    def set_crossing_line(self, p1, p2):
+        with QMutexLocker(self._mutex):
+            self._crossing_line.set_points(p1, p2)
+
+    def clear_crossing_line(self):
+        with QMutexLocker(self._mutex):
+            self._crossing_line.clear()
+
+    def get_crossing_line(self) -> CrossingLine:
+        return self._crossing_line
+
+    def reset_counters(self):
+        with QMutexLocker(self._mutex):
+            self._counters = {"total": 0, "pass": 0, "fail": 0, "in_zone": 0}
+            self._person_states.clear()
+
+    def stop(self):
+        self._running = False
+
+    # ── thread entry ──────────────────────────────────────────────────────────
+    def run(self):
+        cfg          = self._cfg
+        sensitivity  = cfg.get("sensitivity", "STRICT")
+        hold_sec     = cfg.get("hold_seconds", 0.3)
+        save_images  = cfg.get("save_images", True)
+        capture_dir  = cfg.get("capture_dir", "captures")
+        log_cooldown = cfg.get("log_cooldown", 10.0)
+        show_overlay = cfg.get("show_debug_overlay", True)
+        os.makedirs(capture_dir, exist_ok=True)
+
+        MIN_VISIBLE_FRAMES  = cfg.get("min_visible_frames",  8)
+        MIN_BBOX_HEIGHT_REL = cfg.get("min_bbox_height_rel", 0.15)
+        MIN_BBOX_WIDTH_REL  = cfg.get("min_bbox_width_rel",  0.05)
+
+        device     = cfg.get("device", "cpu")
+        model_path = cfg.get("yolo_model", "yolov8n-pose.pt")
+        self.status_changed.emit(f"Loading {model_path} on {device}…")
+
+        detector = None
+        for attempt in ([device] if device == "cpu" else [device, "cpu"]):
+            try:
+                detector = PoseDetector(model_path=model_path,
+                                        conf=cfg.get("conf_threshold", 0.5),
+                                        device=attempt)
+                if attempt != device:
+                    self.status_changed.emit("⚠ GPU unavailable — running on CPU.")
+                break
+            except Exception as e:
+                err = str(e)
+                if attempt != "cpu" and ("1114" in err or "dll" in err.lower()):
+                    self.status_changed.emit("GPU init failed, retrying on CPU…")
+                    continue
+                self.error_occurred.emit(f"Model load failed: {e}")
+                return
+
+        if detector is None:
+            self.error_occurred.emit("Could not initialise detector.")
+            return
+
+        camera = CameraManager()
+        source = cfg.get("camera_source", 0)
+        if not camera.connect(source):
+            self.error_occurred.emit(f"Cannot open camera: {source}")
+            return
+
+        self.status_changed.emit("Monitoring started")
+        self._running = True
+        fps_counter   = _FPSCounter()
+        person_states = self._person_states
+        counters      = self._counters
+
+        while self._running:
+            frame_raw = camera.read()
+            if frame_raw is None:
+                time.sleep(0.05)
+                continue
+
+            frame_mirror, det_result = detector.process(frame_raw)
+            fh, fw = frame_mirror.shape[:2]
+
+            with QMutexLocker(self._mutex):
+                crossing_line = self._crossing_line
+
+            active_ids = set()
+
+            for person in det_result.persons:
+                track_id = person.track_id
+                bbox     = person.bbox
+                kps      = person.keypoints
+                active_ids.add(track_id)
+
+                if track_id not in person_states:
+                    person_states[track_id] = PersonState(track_id=track_id)
+                state = person_states[track_id]
+                state.frames_seen += 1
+                state._last_bbox = bbox   # keep latest bbox for gone-handler capture
+
+                # bbox size guard
+                bbox_w = bbox[2] - bbox[0]
+                bbox_h = bbox[3] - bbox[1]
+                is_full = (bbox_h >= fh * MIN_BBOX_HEIGHT_REL and
+                           bbox_w >= fw * MIN_BBOX_WIDTH_REL)
+                if not is_full:
+                    _draw_person(frame_mirror, person, state, None, sensitivity, show_overlay)
+                    continue
+
+                gesture = classify_pose_gesture(kps, sensitivity) if kps is not None else None
+
+                if gesture and state.accept_gesture(gesture, sensitivity):
+                    now = time.time()
+                    if gesture not in state.gesture_start:
+                        state.gesture_start[gesture] = now
+                    elapsed = now - state.gesture_start[gesture]
+                    if elapsed >= hold_sec:
+                        state.completed.add(gesture)
+                        state.gesture_start.pop(gesture, None)
+                        if sensitivity == "STRICT":
+                            state.next_expected += 1
+                    for g in list(state.gesture_start):
+                        if g != gesture:
+                            state.gesture_start.pop(g)
+                else:
+                    # gesture is None OR gesture not accepted (wrong order/already done)
+                    # matches prototype: clear pending timer when not holding a valid pose
+                    state.gesture_start.clear()
+
+                if crossing_line.active:
+                    foot_x   = (bbox[0] + bbox[2]) / 2
+                    foot_y   = bbox[3]
+                    cur_side = crossing_line.side(foot_x, foot_y)
+
+                    if state.last_side == 0:
+                        state.last_side = cur_side
+                    elif cur_side != state.last_side:
+                        state.last_side = cur_side
+                        if state.frames_seen >= MIN_VISIBLE_FRAMES and state.can_log(log_cooldown):
+                            state.crossed = True
+                            result = "PASS" if state.passed_for_mode(sensitivity) else "FAIL"
+                            with QMutexLocker(self._mutex):
+                                counters["total"] += 1
+                                counters["pass" if result == "PASS" else "fail"] += 1
+                            img_path = ""
+                            if save_images:
+                                img_path = _save_capture(frame_mirror, bbox, track_id,
+                                                         result, capture_dir)
+                            state.last_log_time = time.time()
+                            self.crossing_event.emit({
+                                "track_id":   track_id,
+                                "result":     result,
+                                "mode":       sensitivity,
+                                "image_path": img_path,
+                                "ts":         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            })
+                            # reset checklist for next pass — only after a valid count
+                            state.completed.clear()
+                            state.gesture_start.clear()
+                            state.next_expected = 0
+
+                _draw_person(frame_mirror, person, state, gesture, sensitivity, show_overlay)
+
+            gone = set(person_states.keys()) - active_ids
+            for gid in gone:
+                st = person_states.pop(gid)
+                # Count when person exits and was NOT already counted via crossing line
+                if not st.crossed and st.frames_seen >= MIN_VISIBLE_FRAMES:
+                    result = "PASS" if st.passed_for_mode(sensitivity) else "FAIL"
+                    with QMutexLocker(self._mutex):
+                        counters["total"] += 1
+                        counters["pass" if result == "PASS" else "fail"] += 1
+                    img_path = ""
+                    if save_images:
+                        img_path = _save_capture(frame_mirror, st._last_bbox,
+                                                 gid, result, capture_dir) \
+                                   if hasattr(st, "_last_bbox") else ""
+                    self.crossing_event.emit({
+                        "track_id":   gid,
+                        "result":     result,
+                        "mode":       sensitivity,
+                        "image_path": img_path,
+                        "ts":         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    })
+
+            with QMutexLocker(self._mutex):
+                counters["in_zone"] = len(active_ids)
+
+            if crossing_line.active:
+                _draw_crossing_line(frame_mirror, crossing_line)
+
+            fps = fps_counter.tick()
+            _draw_hud(frame_mirror, sensitivity, fps)
+
+            self.frame_ready.emit(_to_qimage(frame_mirror))
+            self.stats_updated.emit({**counters, "fps": round(fps, 1)})
+
+        camera.disconnect()
+        self.status_changed.emit("Monitoring stopped")
+
+
+# ── helpers ───────────────────────────────────────────────────────────────────
+
+GESTURE_ICONS  = {"LEFT": "L", "RIGHT": "R", "STRAIGHT": "S"}
+GESTURE_LABELS = {"LEFT": "<- LEFT", "RIGHT": "RIGHT ->", "STRAIGHT": "^ STRAIGHT"}
+COLOR_PASS = (0,  200,  80)
+COLOR_WARN = (0,  140, 255)
+COLOR_BLK  = (0,    0,   0)
+COLOR_CYAN = (255, 220,  0)
+
+
+def _draw_person(frame, person, state, gesture, sensitivity, show_overlay: bool = True):
+    """
+    Draw bbox, checklist label, gesture annotation, skeleton and optional debug overlay.
+    Matches prototype draw_person_label + draw_skeleton + draw_debug_kp exactly.
+    """
+    from detection.person_state import GESTURE_ORDER
+    bbox = person.bbox
+    kps  = person.keypoints
+    x1, y1, x2, y2 = [int(v) for v in bbox]
+
+    passed     = state.passed_for_mode(sensitivity)
+    box_color  = COLOR_PASS if passed else COLOR_WARN
+
+    cv2.rectangle(frame, (x1, y1), (x2, y2), box_color, 2)
+
+    # ── checklist label ───────────────────────────────────────────────────────
+    show_gestures = ["LEFT", "RIGHT"] if sensitivity == "LOOSE" else GESTURE_ORDER
+    checks = "".join(
+        f"[{GESTURE_ICONS[g]}]" if g in state.completed else f"({GESTURE_ICONS[g]})"
+        for g in show_gestures
+    )
+    status = "PASS" if passed else checks
+    label  = f"#{state.track_id}  {status}"
+    lw, lh = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)[0]
+    cv2.rectangle(frame, (x1, y1 - lh - 8), (x1 + lw + 6, y1), box_color, -1)
+    cv2.putText(frame, label, (x1 + 3, y1 - 4),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, COLOR_BLK, 2, cv2.LINE_AA)
+
+    # ── current gesture annotation ────────────────────────────────────────────
+    if gesture and not passed:
+        cv2.putText(frame, GESTURE_LABELS.get(gesture, gesture), (x1, y2 + 18),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, COLOR_CYAN, 2, cv2.LINE_AA)
+
+    # ── skeleton + debug overlay ──────────────────────────────────────────────
+    if kps is not None:
+        skel_color = COLOR_PASS if passed else (80, 180, 255)
+        draw_skeleton(frame, kps, skel_color)
+        if show_overlay:
+            draw_debug_kp(frame, kps, bbox)
+
+
+
+def _draw_crossing_line(frame, line: CrossingLine):
+    p1 = (int(line.p1[0]), int(line.p1[1]))
+    p2 = (int(line.p2[0]), int(line.p2[1]))
+    cv2.line(frame, p1, p2, (0, 220, 255), 2)
+    cv2.circle(frame, p1, 5, (0, 220, 255), -1)
+    cv2.circle(frame, p2, 5, (0, 220, 255), -1)
+
+
+def _draw_hud(frame, sensitivity: str, fps: float):
+    h, w = frame.shape[:2]
+    txt  = f"{sensitivity}  |  {fps:.1f} FPS"
+    cv2.putText(frame, txt, (10, h - 12),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (80, 140, 200), 1)
+
+
+def _save_capture(frame, bbox, track_id: int, result: str, capture_dir: str) -> str:
+    try:
+        x1, y1, x2, y2 = [int(v) for v in bbox]
+        pad = 20
+        h, w = frame.shape[:2]
+        crop = frame[max(0, y1-pad):min(h, y2+pad), max(0, x1-pad):min(w, x2+pad)]
+        ts   = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        name = f"{ts}_{result}_id{track_id}.jpg"
+        path = os.path.join(capture_dir, name)
+        cv2.imwrite(path, crop)
+        return path
+    except Exception:
+        return ""
+
+
+def _to_qimage(frame: np.ndarray) -> QImage:
+    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    h, w, ch = rgb.shape
+    return QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888).copy()
+
+
+class _FPSCounter:
+    def __init__(self):
+        self._t   = time.time()
+        self._fps = 0.0
+
+    def tick(self) -> float:
+        now = time.time()
+        dt  = now - self._t
+        self._t = now
+        if dt > 0:
+            self._fps = 0.8 * self._fps + 0.2 * (1.0 / dt)
+        return self._fps

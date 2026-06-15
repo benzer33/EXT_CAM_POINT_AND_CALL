@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>ea724fa8-beb4-4f65-95c8-c1460631ced7</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>EXT_CAM_POINT_AND_CALL.py</StartupFile>
+    <StartupFile>main.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -12,7 +12,7 @@
     <Name>EXT_CAM_POINT_AND_CALL</Name>
     <RootNamespace>EXT_CAM_POINT_AND_CALL</RootNamespace>
     <IsWindowsApplication>False</IsWindowsApplication>
-    <InterpreterId>Global|VisualStudio|venv312 (Python 3.12 (64-bit))</InterpreterId>
+    <InterpreterId>Global|PythonCore|3.12</InterpreterId>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <DebugSymbols>true</DebugSymbols>
@@ -23,10 +23,54 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="EXT_CAM_POINT_AND_CALL.py" />
+    <Compile Include="camera\camera_manager.py" />
+    <Compile Include="camera\rtsp_profiles.py" />
+    <Compile Include="camera\__init__.py" />
+    <Compile Include="config\config_manager.py" />
+    <Compile Include="config\__init__.py" />
+    <Compile Include="database\db_manager.py" />
+    <Compile Include="database\__init__.py" />
+    <Compile Include="detection\crossing_line.py" />
+    <Compile Include="detection\gesture_classifier.py" />
+    <Compile Include="detection\person_state.py" />
+    <Compile Include="detection\pose_detector.py" />
+    <Compile Include="detection\__init__.py" />
+    <Compile Include="EXT_CAM_POINT_AND_CALL bak.py" />
+    <Compile Include="main.py" />
+    <Compile Include="notification\teams_notifier.py" />
+    <Compile Include="notification\__init__.py" />
+    <Compile Include="services\monitoring_service.py" />
+    <Compile Include="services\__init__.py" />
+    <Compile Include="ui\main_window.py" />
+    <Compile Include="ui\pages\calibration_page.py" />
+    <Compile Include="ui\pages\camera_page.py" />
+    <Compile Include="ui\pages\dashboard_page.py" />
+    <Compile Include="ui\pages\detection_page.py" />
+    <Compile Include="ui\pages\history_page.py" />
+    <Compile Include="ui\pages\notification_page.py" />
+    <Compile Include="ui\pages\settings_page.py" />
+    <Compile Include="ui\pages\__init__.py" />
+    <Compile Include="ui\styles.py" />
+    <Compile Include="ui\__init__.py" />
+    <Compile Include="utils\device_check.py" />
+    <Compile Include="utils\__init__.py" />
   </ItemGroup>
   <ItemGroup>
+    <InterpreterReference Include="Global|PythonCore|3.12" />
     <InterpreterReference Include="Global|VisualStudio|venv312 (Python 3.12 (64-bit))" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="camera\" />
+    <Folder Include="config\" />
+    <Folder Include="database\" />
+    <Folder Include="detection\" />
+    <Folder Include="notification\" />
+    <Folder Include="profiles\" />
+    <Folder Include="resources\" />
+    <Folder Include="services\" />
+    <Folder Include="ui\" />
+    <Folder Include="ui\pages\" />
+    <Folder Include="utils\" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in

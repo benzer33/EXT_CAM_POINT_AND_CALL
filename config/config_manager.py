@@ -29,6 +29,7 @@ DEFAULT_CONFIG: dict = {
     "theme":                "dark",
     "language":             "en",
     "show_debug_overlay":   True,   # show shoulder line + wrist dots
+    "mirror_feed":          False,  # flip frame horizontally (True for webcam, False for IP cam)
     # ── gesture thresholds — must match prototype values ────────────────────
     "side_ratio":           0.05,   # POINT_SIDE_RATIO
     "height_ratio":         0.40,   # POINT_HEIGHT_RATIO
@@ -38,6 +39,21 @@ DEFAULT_CONFIG: dict = {
     "min_bbox_height_rel":  0.15,
     "min_bbox_width_rel":   0.05,
     "log_cooldown":         10.0,
+    # ── No-Entry Zone ────────────────────────────────────────────────────────
+    "zone_polygons":        [],    # list of Zone dicts (see detection/zone_detector.py)
+    "zone_saved_w":         1280,  # canvas resolution when zones were drawn
+    "zone_saved_h":          720,
+    "zone_det_model":       "yolov8n.pt",   # plain detection model for zone service
+    # ── Dashboard Detection Zone ────────────────────────────────────────────────
+    "dashboard_zone":       [],    # list of [x,y] points for the dashboard filter zone
+    "dashboard_zone_w":     1280,  # canvas resolution when dashboard zone was drawn
+    "dashboard_zone_h":      720,
+    # ── RTSP Profiles (scanner) ──────────────────────────────────────────────
+    "rtsp_profiles":        [],    # [{"name":…, "ip":…, "url":…}]
+    "rtsp_credentials":     [      # tried in order by scanner
+        {"username": "admin", "password": "REDACTED_CAMERA_PASSWORD"},
+        {"username": "admin", "password": "REDACTED_CAMERA_PASSWORD"},
+    ],
     "mssql": {
         "server":   "",
         "database": "",

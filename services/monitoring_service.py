@@ -17,6 +17,7 @@ from detection.gesture_classifier import (
 )
 from detection.person_state       import PersonState, GESTURE_ORDER, LOG_COOLDOWN
 from detection.crossing_line      import CrossingLine
+from detection.zone_detector      import Zone
 
 
 class MonitoringService(QThread):
@@ -34,6 +35,8 @@ class MonitoringService(QThread):
         self._crossing_line = CrossingLine()
         self._counters      = {"total": 0, "pass": 0, "fail": 0, "in_zone": 0}
         self._person_states: dict[int, PersonState] = {}
+        # optional detection zone: only count people inside this polygon
+        self._det_zone: list[tuple[int,int]] | None = None
 
         cl_cfg = cfg.get("crossing_line")
         if cl_cfg:
@@ -50,6 +53,18 @@ class MonitoringService(QThread):
 
     def get_crossing_line(self) -> CrossingLine:
         return self._crossing_line
+
+    def set_zone(self, points: list[tuple[int,int]], saved_w: int, saved_h: int):
+        """Set a detection zone; only people inside will be counted."""
+        with QMutexLocker(self._mutex):
+            self._det_zone        = list(points)
+            self._det_zone_saved_w = saved_w
+            self._det_zone_saved_h = saved_h
+
+    def clear_zone(self):
+        """Remove the detection zone filter — count all visible people."""
+        with QMutexLocker(self._mutex):
+            self._det_zone = None
 
     def reset_counters(self):
         with QMutexLocker(self._mutex):
@@ -110,6 +125,7 @@ class MonitoringService(QThread):
         fps_counter   = _FPSCounter()
         person_states = self._person_states
         counters      = self._counters
+        mirror        = cfg.get("mirror_feed", False)
 
         while self._running:
             frame_raw = camera.read()
@@ -117,7 +133,7 @@ class MonitoringService(QThread):
                 time.sleep(0.05)
                 continue
 
-            frame_mirror, det_result = detector.process(frame_raw)
+            frame_mirror, det_result = detector.process(frame_raw, mirror=mirror)
             fh, fw = frame_mirror.shape[:2]
 
             with QMutexLocker(self._mutex):
@@ -125,10 +141,28 @@ class MonitoringService(QThread):
 
             active_ids = set()
 
+            # read zone snapshot once per frame
+            with QMutexLocker(self._mutex):
+                det_zone        = self._det_zone
+                det_zone_saved_w = getattr(self, "_det_zone_saved_w", fw)
+                det_zone_saved_h = getattr(self, "_det_zone_saved_h", fh)
+
             for person in det_result.persons:
                 track_id = person.track_id
                 bbox     = person.bbox
                 kps      = person.keypoints
+
+                # if a detection zone is active, skip people outside it
+                if det_zone and len(det_zone) >= 3:
+                    z = Zone("det", det_zone)
+                    scaled = z.scale_to(det_zone_saved_w, det_zone_saved_h, fw, fh)
+                    if scaled.sample_points_inside(list(bbox)) < 1:
+                        _draw_person(frame_mirror, person, person_states.get(
+                            track_id, type("_", (), {"track_id": track_id,
+                            "passed_for_mode": lambda *a: False,
+                            "completed": set(), "frames_seen": 0})()), None, sensitivity, False)
+                        continue
+
                 active_ids.add(track_id)
 
                 if track_id not in person_states:
@@ -227,6 +261,16 @@ class MonitoringService(QThread):
 
             if crossing_line.active:
                 _draw_crossing_line(frame_mirror, crossing_line)
+
+            # draw detection zone overlay if active
+            if det_zone and len(det_zone) >= 3:
+                z = Zone("det", det_zone)
+                scaled = z.scale_to(det_zone_saved_w, det_zone_saved_h, fw, fh)
+                pts = scaled.np_points
+                overlay = frame_mirror.copy()
+                cv2.fillPoly(overlay, [pts], (0, 180, 80))
+                cv2.addWeighted(overlay, 0.15, frame_mirror, 0.85, 0, frame_mirror)
+                cv2.polylines(frame_mirror, [pts], True, (0, 220, 80), 2)
 
             fps = fps_counter.tick()
             _draw_hud(frame_mirror, sensitivity, fps)

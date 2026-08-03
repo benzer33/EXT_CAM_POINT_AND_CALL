@@ -25,21 +25,25 @@
   <ItemGroup>
     <Compile Include="camera\camera_manager.py" />
     <Compile Include="camera\rtsp_profiles.py" />
+    <Compile Include="camera\rtsp_scanner.py" />
     <Compile Include="camera\__init__.py" />
     <Compile Include="config\config_manager.py" />
     <Compile Include="config\__init__.py" />
+    <Compile Include="create_presentation.py" />
     <Compile Include="database\db_manager.py" />
     <Compile Include="database\__init__.py" />
     <Compile Include="detection\crossing_line.py" />
     <Compile Include="detection\gesture_classifier.py" />
     <Compile Include="detection\person_state.py" />
     <Compile Include="detection\pose_detector.py" />
+    <Compile Include="detection\zone_detector.py" />
     <Compile Include="detection\__init__.py" />
     <Compile Include="EXT_CAM_POINT_AND_CALL bak.py" />
     <Compile Include="main.py" />
     <Compile Include="notification\teams_notifier.py" />
     <Compile Include="notification\__init__.py" />
     <Compile Include="services\monitoring_service.py" />
+    <Compile Include="services\zone_monitoring_service.py" />
     <Compile Include="services\__init__.py" />
     <Compile Include="ui\main_window.py" />
     <Compile Include="ui\pages\calibration_page.py" />
@@ -48,7 +52,9 @@
     <Compile Include="ui\pages\detection_page.py" />
     <Compile Include="ui\pages\history_page.py" />
     <Compile Include="ui\pages\notification_page.py" />
+    <Compile Include="ui\pages\rtsp_scanner_page.py" />
     <Compile Include="ui\pages\settings_page.py" />
+    <Compile Include="ui\pages\zone_page.py" />
     <Compile Include="ui\pages\__init__.py" />
     <Compile Include="ui\styles.py" />
     <Compile Include="ui\__init__.py" />

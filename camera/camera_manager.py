@@ -14,8 +14,22 @@ class CameraManager:
     def connect(self, source) -> bool:
         self.disconnect()
         try:
-            src = int(source) if str(source).isdigit() else source
-            self._cap = cv2.VideoCapture(src)
+            # integer or numeric string → webcam index, use DirectShow on Windows
+            if str(source).isdigit():
+                src = int(source)
+                self._cap = cv2.VideoCapture(src, cv2.CAP_DSHOW)
+                if not self._cap.isOpened():
+                    # fallback: try without explicit backend
+                    self._cap.release()
+                    self._cap = cv2.VideoCapture(src)
+            else:
+                src = source
+                self._cap = cv2.VideoCapture(src, cv2.CAP_FFMPEG)
+                # RTSP tuning: short open/read timeout, minimal buffer
+                if isinstance(src, str) and src.lower().startswith("rtsp"):
+                    self._cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
+                    self._cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)
+                    self._cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             if not self._cap.isOpened():
                 self._cap = None
                 return False

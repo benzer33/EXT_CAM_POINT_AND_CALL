@@ -57,6 +57,11 @@ class CameraPage(QWidget):
         self._build_ui()
         self._load_profiles()
 
+    def showEvent(self, event):
+        """Refresh the profile table each time the page becomes visible."""
+        super().showEvent(event)
+        self._load_profiles()
+
     def _build_ui(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(20, 20, 20, 20)

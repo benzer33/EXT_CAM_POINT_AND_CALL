@@ -52,6 +52,7 @@
     <Compile Include="ui\pages\detection_page.py" />
     <Compile Include="ui\pages\history_page.py" />
     <Compile Include="ui\pages\notification_page.py" />
+    <Compile Include="ui\pages\report_page.py" />
     <Compile Include="ui\pages\rtsp_scanner_page.py" />
     <Compile Include="ui\pages\settings_page.py" />
     <Compile Include="ui\pages\zone_page.py" />

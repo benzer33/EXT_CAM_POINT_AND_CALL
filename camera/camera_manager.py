@@ -1,7 +1,9 @@
 """
 CameraManager — OpenCV video source wrapper.
+รองรับทั้ง Windows (DirectShow) และ Linux/Jetson (V4L2 / default backend)
 """
 from __future__ import annotations
+import sys
 import cv2
 import numpy as np
 
@@ -14,18 +16,23 @@ class CameraManager:
     def connect(self, source) -> bool:
         self.disconnect()
         try:
-            # integer or numeric string → webcam index, use DirectShow on Windows
             if str(source).isdigit():
                 src = int(source)
-                self._cap = cv2.VideoCapture(src, cv2.CAP_DSHOW)
-                if not self._cap.isOpened():
-                    # fallback: try without explicit backend
-                    self._cap.release()
-                    self._cap = cv2.VideoCapture(src)
+                if sys.platform == "win32":
+                    # Windows: DirectShow ให้ latency ต่ำสุด
+                    self._cap = cv2.VideoCapture(src, cv2.CAP_DSHOW)
+                    if not self._cap.isOpened():
+                        self._cap.release()
+                        self._cap = cv2.VideoCapture(src)
+                else:
+                    # Linux/Jetson: ใช้ V4L2 หรือ default backend
+                    self._cap = cv2.VideoCapture(src, cv2.CAP_V4L2)
+                    if not self._cap.isOpened():
+                        self._cap.release()
+                        self._cap = cv2.VideoCapture(src)
             else:
                 src = source
                 self._cap = cv2.VideoCapture(src, cv2.CAP_FFMPEG)
-                # RTSP tuning: short open/read timeout, minimal buffer
                 if isinstance(src, str) and src.lower().startswith("rtsp"):
                     self._cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
                     self._cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000)

@@ -48,6 +48,8 @@ DEFAULT_CONFIG: dict = {
     "dashboard_zone":       [],    # list of [x,y] points for the dashboard filter zone
     "dashboard_zone_w":     1280,  # canvas resolution when dashboard zone was drawn
     "dashboard_zone_h":      720,
+    # ── SQLite local database ────────────────────────────────────────────────
+    "sqlite_path":          os.path.join(BASE_DIR, "captures", "events.db"),
     # ── RTSP Profiles (scanner) ──────────────────────────────────────────────
     "rtsp_profiles":        [],    # [{"name":…, "ip":…, "url":…}]
     "rtsp_credentials":     [      # tried in order by scanner

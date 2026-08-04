@@ -96,7 +96,7 @@ class DashboardPage(QWidget):
         super().__init__(parent)
         self._cfg      = cfg
         self._service: MonitoringService | None = None
-        self._db       = DBManager(cfg.get("mssql", {}))
+        self._db       = DBManager(cfg)
         self._notifier = TeamsNotifier(
             webhook_url = cfg.get("teams_webhook", ""),
             send_pass   = cfg.get("teams_send_pass", False),
@@ -311,7 +311,7 @@ class DashboardPage(QWidget):
     def refresh_config(self, cfg: dict):
         """Call this after Settings are saved so DB + notifier use the latest config."""
         self._cfg = cfg
-        self._db  = DBManager(cfg.get("mssql", {}))
+        self._db  = DBManager(cfg)
         self._db.init()
         self._notifier = TeamsNotifier(
             webhook_url = cfg.get("teams_webhook", ""),

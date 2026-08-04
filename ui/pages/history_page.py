@@ -17,7 +17,7 @@ class HistoryPage(QWidget):
     def __init__(self, cfg: dict, parent=None):
         super().__init__(parent)
         self._cfg  = cfg
-        self._db   = DBManager(cfg.get("mssql", {}))
+        self._db   = DBManager(cfg)
         self._rows: list[dict] = []
         self._build_ui()
 

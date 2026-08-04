@@ -12,6 +12,7 @@ from ui.pages.camera_page        import CameraPage
 from ui.pages.calibration_page   import CalibrationPage
 from ui.pages.detection_page     import DetectionPage
 from ui.pages.history_page       import HistoryPage
+from ui.pages.report_page        import ReportPage
 from ui.pages.notification_page  import NotificationPage
 from ui.pages.settings_page      import SettingsPage
 from ui.pages.rtsp_scanner_page  import RTSPScannerPage
@@ -30,6 +31,7 @@ _NAV_GROUPS = [
         ("calibration",  "📐  Calibration"),
     ]),
     ("REPORTS & CONFIG", [
+        ("report",       "📊  Report"),
         ("history",      "📋  History"),
         ("notification", "🔔  Notification"),
         ("settings",     "⚙️  Settings"),
@@ -98,6 +100,7 @@ class MainWindow(QMainWindow):
         cal_page     = CalibrationPage(self._cfg, self)
         det_page     = DetectionPage(self._cfg, self)
         hist_page    = HistoryPage(self._cfg, self)
+        report_page  = ReportPage(self._cfg, self)
         notif_page   = NotificationPage(self._cfg, self)
         sett_page    = SettingsPage(self._cfg, self)
         scanner_page = RTSPScannerPage(self._cfg, self)
@@ -107,6 +110,7 @@ class MainWindow(QMainWindow):
                 ("camera",       cam_page),
                 ("calibration",  cal_page),
                 ("detection",    det_page),
+                ("report",       report_page),
                 ("history",      hist_page),
                 ("notification", notif_page),
                 ("settings",     sett_page),

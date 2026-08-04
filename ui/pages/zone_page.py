@@ -63,7 +63,7 @@ class ZonePage(QWidget):
         super().__init__(parent)
         self._cfg      = cfg
         self._service: ZoneMonitoringService | None = None
-        self._db       = DBManager(cfg.get("mssql", {}))
+        self._db       = DBManager(cfg)
         self._notifier = TeamsNotifier(
             webhook_url = cfg.get("teams_webhook", ""),
             send_pass   = False,

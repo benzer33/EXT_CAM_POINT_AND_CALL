@@ -10,7 +10,10 @@ BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 
 DEFAULT_CONFIG: dict = {
-    "camera_source":        0,
+    "camera_source":        "rtsp://admin:รหัสจริง@192.168.250.58:554/Streaming/Channels/102",
+    "camera_target_width":  1028,   # ความกว้าง output ที่ decode มา (GStreamer NVDEC)
+    "camera_target_height": 720,   # ความสูง output ที่ decode มา (GStreamer NVDEC)
+    "camera_codec":         "h265", # "h264" หรือ "h265" — ต้องตรงกับ codec จริงของกล้อง
     "yolo_model":           "yolov8n-pose.pt",
     "conf_threshold":       0.5,
     "hold_seconds":         0.3,

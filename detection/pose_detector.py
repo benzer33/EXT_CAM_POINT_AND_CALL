@@ -1,5 +1,13 @@
 """
 PoseDetector — wraps YOLOv8 Pose + ByteTrack.
+
+รองรับทั้ง .pt (PyTorch) และ .engine (TensorRT) โดยไม่ต้องเปลี่ยน code
+
+การ export โมเดลเป็น TensorRT สำหรับ Jetson (ทำครั้งเดียวบนเครื่อง Jetson เท่านั้น):
+    yolo export model=yolov8n-pose.pt format=engine device=0 half=True imgsz=640
+
+จากนั้นตั้งค่า config: yolo_model = "yolov8n-pose.engine"
+ultralytics จะโหลด TensorRT engine โดยอัตโนมัติผ่าน YOLO(model_path) เหมือนกัน
 """
 from __future__ import annotations
 import numpy as np
@@ -22,8 +30,19 @@ class DetectionResult:
 
 class PoseDetector:
     def __init__(self, model_path: str = "yolov8n-pose.pt", conf: float = 0.5, device: str = "cpu"):
+        """
+        Parameters
+        ----------
+        model_path : str
+            path ไปยัง .pt (PyTorch) หรือ .engine (TensorRT) file
+            TensorRT engine ต้อง export ไว้ล่วงหน้าบน Jetson ก่อนใช้งาน
+        conf       : float  confidence threshold
+        device     : str    "cpu", "cuda", "0" ฯลฯ (ไม่ใช้สำหรับ TensorRT engine)
+        """
         from ultralytics import YOLO
         import supervision as sv
+        # YOLO() รองรับทั้ง .pt และ .engine (TensorRT) โดยอัตโนมัติ
+        # ไม่ต้องเขียน logic โหลดพิเศษเพิ่ม
         self._model   = YOLO(model_path)
         self._tracker = sv.ByteTrack()
         self._conf    = conf

@@ -82,7 +82,10 @@ class MonitoringService(QThread):
         save_images  = cfg.get("save_images", True)
         capture_dir  = cfg.get("capture_dir", "captures")
         log_cooldown = cfg.get("log_cooldown", 10.0)
-        show_overlay = cfg.get("show_debug_overlay", True)
+        show_overlay   = cfg.get("show_debug_overlay", True)
+        # infer_every_n: รัน YOLO inference ทุก n เฟรม, เฟรมที่เหลือ reuse ผลลัพธ์เก่า
+        # ค่า default=2 หมายถึง inference 1 ใน 2 เฟรม (ลด CPU/GPU load ~50%)
+        infer_every_n  = max(1, int(cfg.get("infer_every_n", 2)))
         os.makedirs(capture_dir, exist_ok=True)
 
         MIN_VISIBLE_FRAMES  = cfg.get("min_visible_frames",  8)
@@ -115,17 +118,23 @@ class MonitoringService(QThread):
             return
 
         camera = CameraManager()
-        source = cfg.get("camera_source", 0)
-        if not camera.connect(source):
+        source       = cfg.get("camera_source", 0)
+        cam_target_w = cfg.get("camera_target_width",  1920)
+        cam_target_h = cfg.get("camera_target_height", 1080)
+        cam_codec    = cfg.get("camera_codec",         "h264")
+        if not camera.connect(source, target_w=cam_target_w,
+                               target_h=cam_target_h, codec=cam_codec):
             self.error_occurred.emit(f"Cannot open camera: {source}")
             return
 
         self.status_changed.emit("Monitoring started")
-        self._running = True
-        fps_counter   = _FPSCounter()
-        person_states = self._person_states
-        counters      = self._counters
-        mirror        = cfg.get("mirror_feed", False)
+        self._running     = True
+        fps_counter       = _FPSCounter()
+        person_states     = self._person_states
+        counters          = self._counters
+        mirror            = cfg.get("mirror_feed", False)
+        frame_idx         = 0          # นับเฟรมที่อ่านมาสำเร็จ
+        _last_det_result  = None       # DetectionResult จาก inference ครั้งล่าสุด
 
         while self._running:
             frame_raw = camera.read()
@@ -133,7 +142,24 @@ class MonitoringService(QThread):
                 time.sleep(0.05)
                 continue
 
-            frame_mirror, det_result = detector.process(frame_raw, mirror=mirror)
+            frame_idx    += 1
+            run_inference = (frame_idx % infer_every_n == 0)
+
+            if run_inference:
+                # รัน YOLO inference เต็มๆ และเก็บผลลัพธ์ไว้ reuse
+                frame_mirror, det_result = detector.process(frame_raw, mirror=mirror)
+                _last_det_result = det_result
+            else:
+                # ข้าม inference — flip/copy frame ให้ GUI ไม่ค้าง แต่ใช้ผล detection เก่า
+                import cv2 as _cv2
+                frame_mirror = _cv2.flip(frame_raw, 1) if mirror else frame_raw.copy()
+                det_result   = _last_det_result
+
+            # ถ้ายังไม่มีผล inference เลย (เฟรมแรกๆ ที่ skip) ให้รอรอบถัดไป
+            if det_result is None:
+                self.frame_ready.emit(_to_qimage(frame_mirror))
+                continue
+
             fh, fw = frame_mirror.shape[:2]
 
             with QMutexLocker(self._mutex):

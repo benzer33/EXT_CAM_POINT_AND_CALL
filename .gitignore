@@ -369,3 +369,9 @@ captures/
 *.sqlite
 *.log
 app_log.txt
+# ── Application secrets & runtime data ──
+config.json
+captures/
+*.db
+*.sqlite
+*.log

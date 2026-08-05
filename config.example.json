@@ -1,0 +1,69 @@
+{
+  "_readme": "คัดลอกไฟล์นี้เป็น config.json แล้วใส่ค่าจริง — ห้าม commit config.json ขึ้น git",
+
+  "camera_source":        "rtsp://USERNAME:PASSWORD@CAMERA_IP:554/Streaming/Channels/101",
+  "camera_target_width":  1920,
+  "camera_target_height": 1080,
+  "camera_codec":         "h264",
+
+  "yolo_model":           "yolov8n-pose.pt",
+  "conf_threshold":       0.5,
+  "hold_seconds":         0.3,
+  "sensitivity":          "STRICT",
+  "device":               "cpu",
+
+  "save_images":          true,
+  "retention_days":       30,
+  "capture_dir":          "captures",
+
+  "crossing_line":        null,
+
+  "teams_webhook":        "https://outlook.office.com/webhook/YOUR_WEBHOOK_URL",
+  "teams_send_pass":      false,
+  "teams_send_fail":      true,
+
+  "auto_load_profile":    "",
+  "auto_connect":         false,
+  "auto_start":           false,
+  "theme":                "dark",
+  "language":             "en",
+  "show_debug_overlay":   true,
+  "mirror_feed":          false,
+
+  "infer_every_n":        2,
+
+  "side_ratio":           0.05,
+  "height_ratio":         0.40,
+  "straight_ratio":       0.01,
+  "center_ratio":         0.45,
+  "min_visible_frames":   8,
+  "min_bbox_height_rel":  0.15,
+  "min_bbox_width_rel":   0.05,
+  "log_cooldown":         10.0,
+
+  "zone_polygons":        [],
+  "zone_saved_w":         1280,
+  "zone_saved_h":         720,
+  "zone_det_model":       "yolov8n.pt",
+
+  "dashboard_zone":       [],
+  "dashboard_zone_w":     1280,
+  "dashboard_zone_h":     720,
+
+  "sqlite_path":          "captures/events.db",
+
+  "rtsp_profiles":        [],
+  "rtsp_credentials": [
+    { "username": "admin", "password": "CAMERA_PASSWORD_1" },
+    { "username": "admin", "password": "CAMERA_PASSWORD_2" }
+  ],
+
+  "mssql": {
+    "_note":    "ไม่ได้ใช้แล้ว — ระบบใช้ SQLite local แทน",
+    "server":   "",
+    "database": "",
+    "username": "",
+    "password": "",
+    "driver":   "ODBC Driver 17 for SQL Server"
+  }
+}

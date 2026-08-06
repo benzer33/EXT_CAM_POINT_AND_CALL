@@ -40,10 +40,12 @@ def classify_pose_gesture(keypoints, mode: str = "STRICT"):
     """
     Classify pointing gesture from COCO pose keypoints.
 
-    mode = "STRICT"  wrist must reach height threshold; correct order R→L→S required.
-    mode = "LOOSE"   any order; no height limit; only LEFT/RIGHT/STRAIGHT checked.
+    mode = "STRICT"   wrist must reach height threshold; correct order R→L→S required.
+    mode = "LOOSE"    any order; no height limit; only LEFT/RIGHT/STRAIGHT checked.
+    mode = "HANDSUP"  ตรวจว่ายกมือขึ้นสูงกว่าเอว (hip) อย่างน้อย 1 ข้าง
+                      PASS = มือทั้งสองข้างขึ้นมาเหนือเอว (wrist_y < hip_y)
 
-    Returns "LEFT" | "RIGHT" | "STRAIGHT" | None
+    Returns "LEFT" | "RIGHT" | "STRAIGHT" | "HANDSUP" | None
     """
     sL = get_kp(keypoints, KP_SHOULDER_L)
     sR = get_kp(keypoints, KP_SHOULDER_R)
@@ -69,6 +71,32 @@ def classify_pose_gesture(keypoints, mode: str = "STRICT"):
     else:
         hip_cy    = shoulder_cy + body_height * 0.66
         torso_mid = shoulder_cy + body_height * 0.33
+
+    # ── HANDSUP ───────────────────────────────────────────────────────────────
+    # PASS เมื่อมือข้างใดข้างหนึ่งขึ้นสูงกว่าเอว (wrist_y < hip_y)
+    if mode == "HANDSUP":
+        wL = get_kp(keypoints, KP_WRIST_L)
+        wR = get_kp(keypoints, KP_WRIST_R)
+        hL = get_kp(keypoints, KP_HIP_L)
+        hR = get_kp(keypoints, KP_HIP_R)
+
+        # คำนวณ hip threshold
+        if hL and hR:
+            hip_threshold = (hL[1] + hR[1]) / 2.0
+        elif hL:
+            hip_threshold = hL[1]
+        elif hR:
+            hip_threshold = hR[1]
+        else:
+            hip_threshold = shoulder_cy + body_height * 0.66
+
+        left_up  = wL is not None and wL[1] < hip_threshold
+        right_up = wR is not None and wR[1] < hip_threshold
+
+        # มือข้างใดข้างหนึ่งขึ้นเหนือเอว = HANDSUP (PASS)
+        if left_up or right_up:
+            return "HANDSUP"
+        return None
 
     # ── LOOSE ─────────────────────────────────────────────────────────────────
     if mode == "LOOSE":

@@ -310,7 +310,8 @@ class MonitoringService(QThread):
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-GESTURE_ICONS  = {"LEFT": "L", "RIGHT": "R", "STRAIGHT": "S"}
+GESTURE_ICONS  = {"LEFT": "L", "RIGHT": "R", "STRAIGHT": "S", "HANDSUP": "H"}
+GESTURE_LABELS = {"LEFT": "<- LEFT", "RIGHT": "RIGHT ->", "STRAIGHT": "^ STRAIGHT", "HANDSUP": "^ HANDS UP"}
 GESTURE_LABELS = {"LEFT": "<- LEFT", "RIGHT": "RIGHT ->", "STRAIGHT": "^ STRAIGHT"}
 COLOR_PASS = (0,  200,  80)
 COLOR_WARN = (0,  140, 255)
@@ -334,7 +335,13 @@ def _draw_person(frame, person, state, gesture, sensitivity, show_overlay: bool 
     cv2.rectangle(frame, (x1, y1), (x2, y2), box_color, 2)
 
     # ── checklist label ───────────────────────────────────────────────────────
-    show_gestures = ["LEFT", "RIGHT"] if sensitivity == "LOOSE" else GESTURE_ORDER
+    from detection.person_state import HANDSUP_ORDER
+    if sensitivity == "LOOSE":
+        show_gestures = ["LEFT", "RIGHT"]
+    elif sensitivity == "HANDSUP":
+        show_gestures = HANDSUP_ORDER
+    else:
+        show_gestures = GESTURE_ORDER
     checks = "".join(
         f"[{GESTURE_ICONS[g]}]" if g in state.completed else f"({GESTURE_ICONS[g]})"
         for g in show_gestures

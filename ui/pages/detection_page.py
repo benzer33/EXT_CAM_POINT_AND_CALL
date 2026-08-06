@@ -36,10 +36,10 @@ class DetectionPage(QWidget):
         # ── sensitivity ───────────────────────────────────────────────────────
         sens_group = QGroupBox("Sensitivity Mode")
         sens_vbox  = QVBoxLayout(sens_group)
-        self._rb_strict = QRadioButton("Strict  —  requires correct order R → L → S, wrist must reach threshold")
-        self._rb_normal = QRadioButton("Normal  —  same as Strict but more relaxed height")
-        self._rb_loose  = QRadioButton("Loose   —  any order, no height requirement (L + R only)")
-        for rb in (self._rb_strict, self._rb_normal, self._rb_loose):
+        self._rb_strict   = QRadioButton("Strict   —  requires correct order R → L → S, wrist must reach threshold")
+        self._rb_handsup  = QRadioButton("Handsup  —  ยกมือสองข้างขึ้นเหนือเอว (LEFT → RIGHT → HANDSUP)")
+        self._rb_loose    = QRadioButton("Loose    —  any order, no height requirement (L + R only)")
+        for rb in (self._rb_strict, self._rb_handsup, self._rb_loose):
             sens_vbox.addWidget(rb)
         root.addWidget(sens_group)
 
@@ -113,9 +113,9 @@ class DetectionPage(QWidget):
 
     def _load(self):
         mode = self._cfg.get("sensitivity", "STRICT")
-        self._rb_strict.setChecked(mode == "STRICT")
-        self._rb_normal.setChecked(mode == "NORMAL")
-        self._rb_loose.setChecked(mode  == "LOOSE")
+        self._rb_strict.setChecked(  mode == "STRICT")
+        self._rb_handsup.setChecked( mode == "HANDSUP")
+        self._rb_loose.setChecked(   mode == "LOOSE")
         self._overlay_chk.setChecked(self._cfg.get("show_debug_overlay", True))
         self._conf_spin.setValue(    self._cfg.get("conf_threshold",    0.50))
         self._hold_spin.setValue(    self._cfg.get("hold_seconds",      0.30))
@@ -131,8 +131,8 @@ class DetectionPage(QWidget):
     def _save(self):
         if self._rb_strict.isChecked():
             self._cfg["sensitivity"] = "STRICT"
-        elif self._rb_normal.isChecked():
-            self._cfg["sensitivity"] = "NORMAL"
+        elif self._rb_handsup.isChecked():
+            self._cfg["sensitivity"] = "HANDSUP"
         else:
             self._cfg["sensitivity"] = "LOOSE"
 

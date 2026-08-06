@@ -5,8 +5,9 @@ Logic matches original prototype exactly.
 import time
 from dataclasses import dataclass, field
 
-GESTURES      = ["LEFT", "RIGHT", "STRAIGHT"]
+GESTURES      = ["LEFT", "RIGHT", "STRAIGHT", "HANDSUP"]
 GESTURE_ORDER = ["RIGHT", "LEFT", "STRAIGHT"]   # mandatory order for STRICT
+HANDSUP_ORDER = ["HANDSUP"]                      # ยกมือข้างใดข้างหนึ่งเหนือเอว = ผ่าน
 LOG_COOLDOWN  = 10.0
 
 
@@ -35,13 +36,18 @@ class PersonState:
 
     def accept_gesture(self, gesture: str, mode: str) -> bool:
         """
-        LOOSE : accept any gesture not yet completed.
-        STRICT: accept only the next gesture in GESTURE_ORDER.
+        LOOSE  : accept any gesture not yet completed.
+        STRICT : accept only the next gesture in GESTURE_ORDER.
+        HANDSUP: accept only the next gesture in HANDSUP_ORDER (L → R → HANDSUP).
         """
         if gesture in self.completed:
             return False
         if mode == "LOOSE":
             return True
+        if mode == "HANDSUP":
+            if self.next_expected < len(HANDSUP_ORDER):
+                return gesture == HANDSUP_ORDER[self.next_expected]
+            return False
         # STRICT — must follow GESTURE_ORDER sequence
         if self.next_expected < len(GESTURE_ORDER):
             return gesture == GESTURE_ORDER[self.next_expected]
@@ -49,9 +55,12 @@ class PersonState:
 
     def passed_for_mode(self, mode: str) -> bool:
         """
-        LOOSE : LEFT + RIGHT both completed.
-        STRICT: all three gestures in correct order (next_expected reached end).
+        LOOSE  : LEFT + RIGHT both completed.
+        STRICT : all three gestures in correct order (next_expected reached end).
+        HANDSUP: LEFT + RIGHT + HANDSUP all completed in order.
         """
         if mode == "LOOSE":
             return {"LEFT", "RIGHT"}.issubset(self.completed)
+        if mode == "HANDSUP":
+            return self.next_expected >= len(HANDSUP_ORDER)
         return self.next_expected >= len(GESTURE_ORDER)

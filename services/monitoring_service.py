@@ -216,7 +216,8 @@ class MonitoringService(QThread):
                     if elapsed >= hold_sec:
                         state.completed.add(gesture)
                         state.gesture_start.pop(gesture, None)
-                        if sensitivity == "STRICT":
+                        # เพิ่ม next_expected สำหรับทุก mode ที่ใช้ ordered sequence
+                        if sensitivity in ("STRICT", "HANDSUP"):
                             state.next_expected += 1
                     for g in list(state.gesture_start):
                         if g != gesture:

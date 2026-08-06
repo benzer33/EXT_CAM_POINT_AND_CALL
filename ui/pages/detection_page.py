@@ -104,6 +104,35 @@ class DetectionPage(QWidget):
         fp_form.addRow("Min bbox height:",    self._min_bbox_h_spin)
         fp_form.addRow("Min bbox width:",     self._min_bbox_w_spin)
         root.addWidget(fp_group)
+
+        # ── tracking stability ─────────────────────────────────────────────────
+        ts_group = QGroupBox("⛹ Tracking Stability")
+        ts_form  = QFormLayout(ts_group)
+
+        ts_note = QLabel(
+            "Grace Period: วินาทีรอก่อน log ว่าคนออกจริง\n"
+            "(สูงขึ้น = ทนทาน track switching ดีขึ้น)"
+        )
+        ts_note.setWordWrap(True)
+        ts_note.setStyleSheet("color:#5A8ABF; font-size:11px;")
+        ts_form.addRow(ts_note)
+
+        self._grace_spin = QDoubleSpinBox()
+        self._grace_spin.setRange(0.5, 5.0)
+        self._grace_spin.setSingleStep(0.5)
+        self._grace_spin.setDecimals(1)
+        self._grace_spin.setSuffix(" วินาที")
+        self._grace_spin.setFixedWidth(130)
+
+        self._reid_dist_spin = QSpinBox()
+        self._reid_dist_spin.setRange(50, 300)
+        self._reid_dist_spin.setSingleStep(10)
+        self._reid_dist_spin.setSuffix(" px")
+        self._reid_dist_spin.setFixedWidth(130)
+
+        ts_form.addRow("Grace Period (วินาที):", self._grace_spin)
+        ts_form.addRow("Re-ID Distance (px):",  self._reid_dist_spin)
+        root.addWidget(ts_group)
         root.addStretch()
 
         btn_save = QPushButton("💾  Save Settings")
@@ -126,6 +155,8 @@ class DetectionPage(QWidget):
         self._min_frames_spin.setValue(self._cfg.get("min_visible_frames",  8))
         self._min_bbox_h_spin.setValue(self._cfg.get("min_bbox_height_rel", 0.15))
         self._min_bbox_w_spin.setValue(self._cfg.get("min_bbox_width_rel",  0.05))
+        self._grace_spin.setValue(     self._cfg.get("track_grace_period_sec",      1.5))
+        self._reid_dist_spin.setValue( self._cfg.get("track_reid_max_distance_px", 150))
 
     @pyqtSlot()
     def _save(self):
@@ -146,4 +177,6 @@ class DetectionPage(QWidget):
         self._cfg["min_visible_frames"]  = self._min_frames_spin.value()
         self._cfg["min_bbox_height_rel"] = self._min_bbox_h_spin.value()
         self._cfg["min_bbox_width_rel"]  = self._min_bbox_w_spin.value()
+        self._cfg["track_grace_period_sec"]     = self._grace_spin.value()
+        self._cfg["track_reid_max_distance_px"] = self._reid_dist_spin.value()
         ConfigManager().save(self._cfg)

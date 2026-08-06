@@ -29,7 +29,12 @@ class DetectionResult:
 
 
 class PoseDetector:
-    def __init__(self, model_path: str = "yolov8n-pose.pt", conf: float = 0.5, device: str = "cpu"):
+    def __init__(self, model_path: str = "yolov8n-pose.pt", conf: float = 0.5,
+                 device: str = "cpu",
+                 track_activation_threshold: float = 0.25,
+                 lost_track_buffer: int = 60,
+                 minimum_matching_threshold: float = 0.75,
+                 frame_rate: int = 20):
         """
         Parameters
         ----------
@@ -38,15 +43,29 @@ class PoseDetector:
             TensorRT engine ต้อง export ไว้ล่วงหน้าบน Jetson ก่อนใช้งาน
         conf       : float  confidence threshold
         device     : str    "cpu", "cuda", "0" ฯลฯ (ไม่ใช้สำหรับ TensorRT engine)
+        track_activation_threshold : float  ค่า confidence ขั้นต่ำในการสร้าง track ใหม่
+        lost_track_buffer          : int    จำนวน frame ที่ ByteTrack จำ track ที่หายไป
+                                            ก่อนจะลบทิ้ง (ตั้งสูงขึ้น = ทนทาน occlusion ดีขึ้น)
+        minimum_matching_threshold : float  IoU threshold สำหรับจับคู่ detection กับ track
+        frame_rate                 : int    FPS ของ stream (ใช้คำนวณ buffer ภายใน ByteTrack)
         """
         from ultralytics import YOLO
         import supervision as sv
         # YOLO() รองรับทั้ง .pt และ .engine (TensorRT) โดยอัตโนมัติ
-        # ไม่ต้องเขียน logic โหลดพิเศษเพิ่ม
         self._model   = YOLO(model_path)
-        self._tracker = sv.ByteTrack()
         self._conf    = conf
         self._device  = device
+        # เก็บ tracker params ไว้ใช้ตอน reset_tracker() ด้วย
+        self._track_activation_threshold  = track_activation_threshold
+        self._lost_track_buffer           = lost_track_buffer
+        self._minimum_matching_threshold  = minimum_matching_threshold
+        self._frame_rate                  = frame_rate
+        self._tracker = sv.ByteTrack(
+            track_activation_threshold=self._track_activation_threshold,
+            lost_track_buffer=self._lost_track_buffer,
+            minimum_matching_threshold=self._minimum_matching_threshold,
+            frame_rate=self._frame_rate,
+        )
 
     def process(self, frame_raw: np.ndarray, mirror: bool = False) -> tuple[np.ndarray, DetectionResult]:
         import cv2
@@ -114,4 +133,9 @@ class PoseDetector:
 
     def reset_tracker(self):
         import supervision as sv
-        self._tracker = sv.ByteTrack()
+        self._tracker = sv.ByteTrack(
+            track_activation_threshold=self._track_activation_threshold,
+            lost_track_buffer=self._lost_track_buffer,
+            minimum_matching_threshold=self._minimum_matching_threshold,
+            frame_rate=self._frame_rate,
+        )

@@ -99,9 +99,15 @@ class MonitoringService(QThread):
         detector = None
         for attempt in ([device] if device == "cpu" else [device, "cpu"]):
             try:
-                detector = PoseDetector(model_path=model_path,
-                                        conf=cfg.get("conf_threshold", 0.5),
-                                        device=attempt)
+                detector = PoseDetector(
+                    model_path=model_path,
+                    conf=cfg.get("conf_threshold", 0.5),
+                    device=attempt,
+                    track_activation_threshold=cfg.get("track_activation_threshold", 0.25),
+                    lost_track_buffer=cfg.get("lost_track_buffer", 60),
+                    minimum_matching_threshold=cfg.get("minimum_matching_threshold", 0.75),
+                    frame_rate=cfg.get("tracker_frame_rate", 20),
+                )
                 if attempt != device:
                     self.status_changed.emit("⚠ GPU unavailable — running on CPU.")
                 break
@@ -135,6 +141,10 @@ class MonitoringService(QThread):
         mirror            = cfg.get("mirror_feed", False)
         frame_idx         = 0          # นับเฟรมที่อ่านมาสำเร็จ
         _last_det_result  = None       # DetectionResult จาก inference ครั้งล่าสุด
+        # ── grace period / re-ID ─────────────────────────────────────────────
+        pending_exits: dict = {}       # track_id -> {"state", "gone_since", "bbox"}
+        GRACE_PERIOD_SEC  = cfg.get("track_grace_period_sec",      1.5)
+        REID_MAX_DISTANCE = cfg.get("track_reid_max_distance_px", 150)
 
         while self._running:
             frame_raw = camera.read()
@@ -192,7 +202,16 @@ class MonitoringService(QThread):
                 active_ids.add(track_id)
 
                 if track_id not in person_states:
-                    person_states[track_id] = PersonState(track_id=track_id)
+                    matched_gid = _find_matching_pending_exit(
+                        bbox, pending_exits, GRACE_PERIOD_SEC, REID_MAX_DISTANCE
+                    )
+                    if matched_gid is not None:
+                        recovered = pending_exits.pop(matched_gid)
+                        state = recovered["state"]
+                        state.track_id = track_id
+                        person_states[track_id] = state
+                    else:
+                        person_states[track_id] = PersonState(track_id=track_id)
                 state = person_states[track_id]
                 state.frames_seen += 1
                 state._last_bbox = bbox   # keep latest bbox for gone-handler capture
@@ -264,17 +283,29 @@ class MonitoringService(QThread):
             gone = set(person_states.keys()) - active_ids
             for gid in gone:
                 st = person_states.pop(gid)
-                # Count when person exits and was NOT already counted via crossing line
+                pending_exits[gid] = {
+                    "state":      st,
+                    "gone_since": time.time(),
+                    "bbox":       getattr(st, "_last_bbox", None),
+                }
+
+            # flush expired pending_exits — คนที่หายเกิน grace period = เดินออกจริง
+            expired_gids = [
+                gid for gid, info in pending_exits.items()
+                if time.time() - info["gone_since"] > GRACE_PERIOD_SEC
+            ]
+            for gid in expired_gids:
+                info = pending_exits.pop(gid)
+                st   = info["state"]
                 if not st.crossed and st.frames_seen >= MIN_VISIBLE_FRAMES:
                     result = "PASS" if st.passed_for_mode(sensitivity) else "FAIL"
                     with QMutexLocker(self._mutex):
                         counters["total"] += 1
                         counters["pass" if result == "PASS" else "fail"] += 1
                     img_path = ""
-                    if save_images:
-                        img_path = _save_capture(frame_mirror, st._last_bbox,
-                                                 gid, result, capture_dir) \
-                                   if hasattr(st, "_last_bbox") else ""
+                    if save_images and info["bbox"] is not None:
+                        img_path = _save_capture(frame_mirror, info["bbox"],
+                                                 gid, result, capture_dir)
                     self.crossing_event.emit({
                         "track_id":   gid,
                         "result":     result,
@@ -396,6 +427,37 @@ def _save_capture(frame, bbox, track_id: int, result: str, capture_dir: str) -> 
         return path
     except Exception:
         return ""
+
+
+def _find_matching_pending_exit(bbox, pending_exits: dict,
+                                 grace_period: float,
+                                 max_distance: float) -> "int | None":
+    """
+    หา pending_exits ที่ตำแหน่ง bbox ใกล้เคียงกับ bbox ที่หายไปล่าสุด และยังอยู่ใน
+    grace period  คืนค่า track_id (key) ที่ใกล้สุดและผ่านเงื่อนไข  ไม่เจอคืน None
+    """
+    now  = time.time()
+    cx   = (bbox[0] + bbox[2]) / 2
+    cy   = (bbox[1] + bbox[3]) / 2
+    best_gid  = None
+    best_dist = max_distance
+    expired   = []
+    for gid, info in pending_exits.items():
+        if now - info["gone_since"] > grace_period:
+            expired.append(gid)
+            continue
+        old_bbox = info["bbox"]
+        if old_bbox is None:
+            continue
+        ox = (old_bbox[0] + old_bbox[2]) / 2
+        oy = (old_bbox[1] + old_bbox[3]) / 2
+        dist = ((cx - ox) ** 2 + (cy - oy) ** 2) ** 0.5
+        if dist < best_dist:
+            best_dist = dist
+            best_gid  = gid
+    for gid in expired:
+        pending_exits.pop(gid, None)
+    return best_gid
 
 
 def _to_qimage(frame: np.ndarray) -> QImage:

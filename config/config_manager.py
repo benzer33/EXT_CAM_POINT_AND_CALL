@@ -16,9 +16,17 @@ DEFAULT_CONFIG: dict = {
     "camera_codec":         "h265", # "h264" หรือ "h265" — ต้องตรงกับ codec จริงของกล้อง
     "yolo_model":           "yolov8n-pose.pt",
     "conf_threshold":       0.5,
+    # ── ByteTrack tracker parameters ─────────────────────────────────────────
+    "track_activation_threshold":   0.25,  # confidence ขั้นต่ำในการสร้าง track ใหม่
+    "lost_track_buffer":            60,    # frame ที่จำ track ก่อนลบ (สูง = ทนทาน occlusion)
+    "minimum_matching_threshold":   0.75,  # IoU threshold จับคู่ detection กับ track
+    "tracker_frame_rate":           20,    # FPS ของ stream (ใช้คำนวณ buffer ภายใน ByteTrack)
+    # ── Re-ID grace period (ป้องกัน track switching log ผิด) ─────────────────
+    "track_grace_period_sec":       1.5,   # วินาทีรอก่อน log ว่าคนเดินออกจริง
+    "track_reid_max_distance_px":   150,   # px สูงสุดในการจับคู่ track เก่า-ใหม่
     "hold_seconds":         0.3,
     "sensitivity":          "STRICT",
-    "device":               "cpu",
+    "device":               "0",
     "save_images":          True,
     "retention_days":       30,
     "capture_dir":          os.path.join(BASE_DIR, "captures"),

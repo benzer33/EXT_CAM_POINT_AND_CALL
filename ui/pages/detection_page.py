@@ -44,6 +44,15 @@ class DetectionPage(QWidget):
         root.addWidget(sens_group)
 
         # ── overlay toggle ────────────────────────────────────────────────────
+        handsup_level_group = QGroupBox("Handsup Level")
+        hl_vbox = QVBoxLayout(handsup_level_group)
+        self._rb_level_waist    = QRadioButton("Waist    —  ยกมือเหนือระดับเอว (ค่าเดิม)")
+        self._rb_level_chest    = QRadioButton("Chest    —  ยกมือเหนือระดับหน้าอก (ประมาณจากกึ่งกลางไหล่-เอว)")
+        self._rb_level_shoulder = QRadioButton("Shoulder —  ยกมือเหนือระดับไหล่ (เข้มงวดสุด)")
+        for rb in (self._rb_level_waist, self._rb_level_chest, self._rb_level_shoulder):
+            hl_vbox.addWidget(rb)
+        root.addWidget(handsup_level_group)
+
         vis_group = QGroupBox("Visualisation")
         vis_vbox  = QVBoxLayout(vis_group)
         self._overlay_chk = QCheckBox("Show shoulder reference lines and wrist dots on live feed")
@@ -145,6 +154,10 @@ class DetectionPage(QWidget):
         self._rb_strict.setChecked(  mode == "STRICT")
         self._rb_handsup.setChecked( mode == "HANDSUP")
         self._rb_loose.setChecked(   mode == "LOOSE")
+        level = self._cfg.get("handsup_level", "waist")
+        self._rb_level_waist.setChecked(   level == "waist")
+        self._rb_level_chest.setChecked(   level == "chest")
+        self._rb_level_shoulder.setChecked(level == "shoulder")
         self._overlay_chk.setChecked(self._cfg.get("show_debug_overlay", True))
         self._conf_spin.setValue(    self._cfg.get("conf_threshold",    0.50))
         self._hold_spin.setValue(    self._cfg.get("hold_seconds",      0.30))
@@ -166,6 +179,13 @@ class DetectionPage(QWidget):
             self._cfg["sensitivity"] = "HANDSUP"
         else:
             self._cfg["sensitivity"] = "LOOSE"
+
+        if self._rb_level_chest.isChecked():
+            self._cfg["handsup_level"] = "chest"
+        elif self._rb_level_shoulder.isChecked():
+            self._cfg["handsup_level"] = "shoulder"
+        else:
+            self._cfg["handsup_level"] = "waist"
 
         self._cfg["show_debug_overlay"]  = self._overlay_chk.isChecked()
         self._cfg["conf_threshold"]      = self._conf_spin.value()

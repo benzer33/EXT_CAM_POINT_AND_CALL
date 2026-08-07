@@ -77,7 +77,8 @@ class MonitoringService(QThread):
     # ── thread entry ──────────────────────────────────────────────────────────
     def run(self):
         cfg          = self._cfg
-        sensitivity  = cfg.get("sensitivity", "STRICT")
+        sensitivity  = cfg.get("sensitivity",   "STRICT")
+        handsup_level = cfg.get("handsup_level", "waist")
         hold_sec     = cfg.get("hold_seconds", 0.3)
         save_images  = cfg.get("save_images", True)
         capture_dir  = cfg.get("capture_dir", "captures")
@@ -225,7 +226,7 @@ class MonitoringService(QThread):
                     _draw_person(frame_mirror, person, state, None, sensitivity, show_overlay)
                     continue
 
-                gesture = classify_pose_gesture(kps, sensitivity) if kps is not None else None
+                gesture = classify_pose_gesture(kps, sensitivity, handsup_level) if kps is not None else None
 
                 if gesture and state.accept_gesture(gesture, sensitivity):
                     now = time.time()

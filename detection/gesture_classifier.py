@@ -25,6 +25,7 @@ STRAIGHT_RATIO          = 0.01   # wrist must be above torso_mid for STRAIGHT he
 STRAIGHT_SHOULDER_RATIO = 0.10   # STRICT STRAIGHT zone: |wrist_x − own_shoulder_x| < bw × this
                                   # also serves as LEFT/RIGHT threshold in STRICT mode
 CENTER_RATIO            = 0.45   # kept for LOOSE mode (unused in STRICT)
+HANDSUP_LEVELS          = ("waist", "chest", "shoulder")  # ระดับเกณฑ์ที่รองรับสำหรับโหมด HANDSUP
 
 
 def get_kp(keypoints, idx):
@@ -36,14 +37,18 @@ def get_kp(keypoints, idx):
     return (x, y, conf) if conf >= 0.3 else None
 
 
-def classify_pose_gesture(keypoints, mode: str = "STRICT"):
+def classify_pose_gesture(keypoints, mode: str = "STRICT", handsup_level: str = "waist"):
     """
     Classify pointing gesture from COCO pose keypoints.
 
     mode = "STRICT"   wrist must reach height threshold; correct order R→L→S required.
     mode = "LOOSE"    any order; no height limit; only LEFT/RIGHT/STRAIGHT checked.
-    mode = "HANDSUP"  ตรวจว่ายกมือขึ้นสูงกว่าเอว (hip) อย่างน้อย 1 ข้าง
-                      PASS = มือทั้งสองข้างขึ้นมาเหนือเอว (wrist_y < hip_y)
+    mode = "HANDSUP"  ตรวจว่ายกมือขึ้นสูงกว่าเกณฑ์ที่กำหนดอย่างน้อย 1 ข้าง
+                      PASS = มือทั้งสองข้างขึ้นมาเหนือเกณฑ์ (wrist_y < threshold_y)
+    handsup_level : str  ระดับเกณฑ์สำหรับโหมด HANDSUP —
+                         "waist"    (เอว, ค่าเดิม)
+                         "chest"    (หน้าอก, ประมาณจากกึ่งกลางไหล่-เอว)
+                         "shoulder" (ไหล่, เข้มงวดสุด)
 
     Returns "LEFT" | "RIGHT" | "STRAIGHT" | "HANDSUP" | None
     """
@@ -73,27 +78,35 @@ def classify_pose_gesture(keypoints, mode: str = "STRICT"):
         torso_mid = shoulder_cy + body_height * 0.33
 
     # ── HANDSUP ───────────────────────────────────────────────────────────────
-    # PASS เมื่อมือข้างใดข้างหนึ่งขึ้นสูงกว่าเอว (wrist_y < hip_y)
+    # PASS เมื่อมือข้างใดข้างหนึ่งขึ้นสูงกว่าเกณฑ์ที่เลือก
     if mode == "HANDSUP":
         wL = get_kp(keypoints, KP_WRIST_L)
         wR = get_kp(keypoints, KP_WRIST_R)
         hL = get_kp(keypoints, KP_HIP_L)
         hR = get_kp(keypoints, KP_HIP_R)
 
-        # คำนวณ hip threshold
+        # คำนวณ hip_cy (ใช้ทั้ง waist และ chest)
         if hL and hR:
-            hip_threshold = (hL[1] + hR[1]) / 2.0
+            hip_cy = (hL[1] + hR[1]) / 2.0
         elif hL:
-            hip_threshold = hL[1]
+            hip_cy = hL[1]
         elif hR:
-            hip_threshold = hR[1]
+            hip_cy = hR[1]
         else:
-            hip_threshold = shoulder_cy + body_height * 0.66
+            hip_cy = shoulder_cy + body_height * 0.66
 
-        left_up  = wL is not None and wL[1] < hip_threshold
-        right_up = wR is not None and wR[1] < hip_threshold
+        # เลือก threshold_y ตาม handsup_level
+        if handsup_level == "chest":
+            threshold_y = (shoulder_cy + hip_cy) / 2.0   # กึ่งกลางไหล่-เอว
+        elif handsup_level == "shoulder":
+            threshold_y = shoulder_cy                     # ระดับไหล่ (เข้มงวดสุด)
+        else:  # "waist" หรือค่าอื่นที่ไม่รู้จัก — fallback เป็นค่าเดิม
+            threshold_y = hip_cy
 
-        # มือข้างใดข้างหนึ่งขึ้นเหนือเอว = HANDSUP (PASS)
+        left_up  = wL is not None and wL[1] < threshold_y
+        right_up = wR is not None and wR[1] < threshold_y
+
+        # มือข้างใดข้างหนึ่งขึ้นเหนือเกณฑ์ = HANDSUP (PASS)
         if left_up or right_up:
             return "HANDSUP"
         return None

@@ -26,6 +26,7 @@ DEFAULT_CONFIG: dict = {
     "track_reid_max_distance_px":   150,   # px สูงสุดในการจับคู่ track เก่า-ใหม่
     "hold_seconds":         0.3,
     "sensitivity":          "STRICT",
+    "handsup_level":         "waist",   # "waist" | "chest" | "shoulder" — ระดับเกณฑ์โหมด HANDSUP
     "device":               "0",
     "save_images":          True,
     "retention_days":       30,

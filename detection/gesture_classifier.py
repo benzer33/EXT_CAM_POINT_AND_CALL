@@ -37,7 +37,7 @@ def get_kp(keypoints, idx):
     return (x, y, conf) if conf >= 0.3 else None
 
 
-def is_face_visible(keypoints, conf_threshold: float = 0.3) -> bool:
+def is_face_visible(keypoints, conf_threshold: float = 0.6) -> bool:
     """
     เช็คว่าเห็นหน้าคนไหม โดยดูจาก nose keypoint (COCO index 0)
     confidence ต่ำ = โมเดลมองไม่เห็นใบหน้า (มักเกิดตอนคนหันหลังให้กล้อง)

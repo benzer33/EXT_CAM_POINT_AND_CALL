@@ -19,6 +19,7 @@ from detection.gesture_classifier import (
 from detection.person_state       import PersonState, GESTURE_ORDER, LOG_COOLDOWN
 from detection.crossing_line      import CrossingLine
 from detection.zone_detector      import Zone
+from detection.forklift_detector  import ForkliftDetector, bbox_overlap_ratio
 
 
 class MonitoringService(QThread):
@@ -126,6 +127,20 @@ class MonitoringService(QThread):
             self.error_occurred.emit("Could not initialise detector.")
             return
 
+        # ── forklift suppression (optional second model) ───────────────────
+        enable_forklift_suppression = cfg.get("enable_forklift_suppression", False)
+        forklift_detector = None
+        if enable_forklift_suppression:
+            try:
+                forklift_detector = ForkliftDetector(
+                    model_path=cfg.get("forklift_model_path", "models/forklift_best.pt"),
+                    conf=cfg.get("forklift_conf_threshold", 0.4),
+                    device=device,
+                )
+            except Exception as e:
+                self.status_changed.emit(f"⚠ Forklift model load failed ({e}) — suppression disabled.")
+                enable_forklift_suppression = False
+
         camera = CameraManager()
         source       = cfg.get("camera_source", 0)
         cam_target_w = cfg.get("camera_target_width",  1920)
@@ -148,6 +163,10 @@ class MonitoringService(QThread):
         pending_exits: dict = {}       # track_id -> {"state", "gone_since", "bbox"}
         GRACE_PERIOD_SEC  = cfg.get("track_grace_period_sec",      1.5)
         REID_MAX_DISTANCE = cfg.get("track_reid_max_distance_px", 150)
+        forklift_infer_every_n    = max(1, int(cfg.get("forklift_infer_every_n", 5)))
+        forklift_overlap_ratio_th = cfg.get("forklift_overlap_ratio", 0.5)
+        min_forklift_frames       = cfg.get("min_forklift_frames", 3)
+        _last_forklift_boxes: list = []   # cache ผลลัพธ์ล่าสุด (frame-skip)
 
         while self._running:
             frame_raw = camera.read()
@@ -167,6 +186,14 @@ class MonitoringService(QThread):
                 import cv2 as _cv2
                 frame_mirror = _cv2.flip(frame_raw, 1) if mirror else frame_raw.copy()
                 det_result   = _last_det_result
+
+            # ── forklift detection (skip-frame) ──────────────────────────────
+            if enable_forklift_suppression and forklift_detector is not None:
+                if frame_idx % forklift_infer_every_n == 0:
+                    _last_forklift_boxes = forklift_detector.detect(frame_raw)
+                forklift_boxes = _last_forklift_boxes
+            else:
+                forklift_boxes = []
 
             # ถ้ายังไม่มีผล inference เลย (เฟรมแรกๆ ที่ skip) ให้รอรอบถัดไป
             if det_result is None:
@@ -220,6 +247,13 @@ class MonitoringService(QThread):
                 state._last_bbox = bbox   # keep latest bbox for gone-handler capture
                 if kps is not None and is_face_visible(kps):
                     state.face_seen_frames += 1
+                if enable_forklift_suppression and forklift_boxes:
+                    max_overlap = max(
+                        (bbox_overlap_ratio(bbox, fb.bbox) for fb in forklift_boxes),
+                        default=0.0
+                    )
+                    if max_overlap >= forklift_overlap_ratio_th:
+                        state.forklift_overlap_frames += 1
 
                 # bbox size guard
                 bbox_w = bbox[2] - bbox[0]
@@ -262,7 +296,10 @@ class MonitoringService(QThread):
                         state.last_side = cur_side
                         if state.frames_seen >= MIN_VISIBLE_FRAMES and state.can_log(log_cooldown):
                             state.crossed = True
-                            should_log = (not require_face_to_log) or state.has_face_evidence()
+                            should_log = (
+                                ((not require_face_to_log) or state.has_face_evidence())
+                                and not (enable_forklift_suppression and state.has_forklift_evidence(min_forklift_frames))
+                            )
                             if should_log:
                                 result = "PASS" if state.passed_for_mode(sensitivity) else "FAIL"
                                 with QMutexLocker(self._mutex):
@@ -306,7 +343,10 @@ class MonitoringService(QThread):
                 info = pending_exits.pop(gid)
                 st   = info["state"]
                 if not st.crossed and st.frames_seen >= MIN_VISIBLE_FRAMES:
-                    should_log = (not require_face_to_log) or st.has_face_evidence()
+                    should_log = (
+                        ((not require_face_to_log) or st.has_face_evidence())
+                        and not (enable_forklift_suppression and st.has_forklift_evidence(min_forklift_frames))
+                    )
                     if should_log:
                         result = "PASS" if st.passed_for_mode(sensitivity) else "FAIL"
                         with QMutexLocker(self._mutex):

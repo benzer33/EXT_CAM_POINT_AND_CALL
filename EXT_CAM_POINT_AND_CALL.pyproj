@@ -33,6 +33,7 @@
     <Compile Include="database\db_manager.py" />
     <Compile Include="database\__init__.py" />
     <Compile Include="detection\crossing_line.py" />
+    <Compile Include="detection\forklift_detector.py" />
     <Compile Include="detection\gesture_classifier.py" />
     <Compile Include="detection\person_state.py" />
     <Compile Include="detection\pose_detector.py" />

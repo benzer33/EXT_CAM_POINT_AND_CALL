@@ -27,7 +27,13 @@ DEFAULT_CONFIG: dict = {
     "hold_seconds":         0.3,
     "sensitivity":          "STRICT",
     "handsup_level":         "waist",   # "waist" | "chest" | "shoulder" — ระดับเกณฑ์โหมด HANDSUP
-    "require_face_to_log":   False,     # True = นับ PASS/FAIL เฉพาะตอนเจอหน้าคน | False = นับทุกกรณีเหมือนเดิม
+    "require_face_to_log":        False,     # True = นับ PASS/FAIL เฉพาะตอนเจอหน้าคน | False = นับทุกกรณีเหมือนเดิม
+    "enable_forklift_suppression": False,   # เปิด/ปิด feature (default ปิด)
+    "forklift_model_path":         "models/forklift_best.pt",
+    "forklift_conf_threshold":     0.4,
+    "forklift_infer_every_n":      5,       # รันโมเดลโฟล์คลิฟท์ทุก N เฟรม (เบากว่า pose)
+    "forklift_overlap_ratio":      0.5,     # สัดส่วนทับซ้อนขั้นต่ำที่นับว่า "อยู่ในรถ"
+    "min_forklift_frames":         3,       # ต้องเจอต่อเนื่องกี่เฟรมก่อนเชื่อว่าจริง
     "device":               "0",
     "save_images":          True,
     "retention_days":       30,

@@ -63,6 +63,16 @@ class DetectionPage(QWidget):
         vis_vbox.addWidget(self._require_face_chk)
         root.addWidget(vis_group)
 
+        # ── forklift suppression ───────────────────────────────────────────────
+        fk_group = QGroupBox("Forklift Suppression")
+        fk_vbox  = QVBoxLayout(fk_group)
+        self._forklift_suppress_chk = QCheckBox(
+            "ไม่นับ PASS/FAIL สำหรับคนที่กำลังขับโฟล์คลิฟท์ "
+            "(ต้องมีไฟล์โมเดล models/forklift_best.pt ก่อนเปิดใช้งาน)"
+        )
+        fk_vbox.addWidget(self._forklift_suppress_chk)
+        root.addWidget(fk_group)
+
         # ── advanced parameters ───────────────────────────────────────────────
         adv_group = QGroupBox("Advanced Parameters")
         form = QFormLayout(adv_group)
@@ -164,6 +174,7 @@ class DetectionPage(QWidget):
         self._rb_level_shoulder.setChecked(level == "shoulder")
         self._overlay_chk.setChecked(self._cfg.get("show_debug_overlay", True))
         self._require_face_chk.setChecked(self._cfg.get("require_face_to_log", False))
+        self._forklift_suppress_chk.setChecked(self._cfg.get("enable_forklift_suppression", False))
         self._conf_spin.setValue(    self._cfg.get("conf_threshold",    0.50))
         self._hold_spin.setValue(    self._cfg.get("hold_seconds",      0.30))
         self._cooldown_spin.setValue(self._cfg.get("log_cooldown",     10.0))
@@ -192,8 +203,9 @@ class DetectionPage(QWidget):
         else:
             self._cfg["handsup_level"] = "waist"
 
-        self._cfg["show_debug_overlay"]  = self._overlay_chk.isChecked()
-        self._cfg["require_face_to_log"] = self._require_face_chk.isChecked()
+        self._cfg["show_debug_overlay"]          = self._overlay_chk.isChecked()
+        self._cfg["require_face_to_log"]          = self._require_face_chk.isChecked()
+        self._cfg["enable_forklift_suppression"]  = self._forklift_suppress_chk.isChecked()
         self._cfg["conf_threshold"]      = self._conf_spin.value()
         self._cfg["hold_seconds"]        = self._hold_spin.value()
         self._cfg["log_cooldown"]        = self._cooldown_spin.value()

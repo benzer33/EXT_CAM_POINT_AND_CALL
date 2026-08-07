@@ -27,6 +27,7 @@ DEFAULT_CONFIG: dict = {
     "hold_seconds":         0.3,
     "sensitivity":          "STRICT",
     "handsup_level":         "waist",   # "waist" | "chest" | "shoulder" — ระดับเกณฑ์โหมด HANDSUP
+    "require_face_to_log":   False,     # True = นับ PASS/FAIL เฉพาะตอนเจอหน้าคน | False = นับทุกกรณีเหมือนเดิม
     "device":               "0",
     "save_images":          True,
     "retention_days":       30,

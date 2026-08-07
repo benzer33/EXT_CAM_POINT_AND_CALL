@@ -14,6 +14,7 @@ from detection.gesture_classifier import (
     classify_pose_gesture,
     draw_skeleton,
     draw_debug_kp,
+    is_face_visible,
 )
 from detection.person_state       import PersonState, GESTURE_ORDER, LOG_COOLDOWN
 from detection.crossing_line      import CrossingLine
@@ -79,6 +80,7 @@ class MonitoringService(QThread):
         cfg          = self._cfg
         sensitivity  = cfg.get("sensitivity",   "STRICT")
         handsup_level = cfg.get("handsup_level", "waist")
+        require_face_to_log = cfg.get("require_face_to_log", False)
         hold_sec     = cfg.get("hold_seconds", 0.3)
         save_images  = cfg.get("save_images", True)
         capture_dir  = cfg.get("capture_dir", "captures")
@@ -216,6 +218,8 @@ class MonitoringService(QThread):
                 state = person_states[track_id]
                 state.frames_seen += 1
                 state._last_bbox = bbox   # keep latest bbox for gone-handler capture
+                if kps is not None and is_face_visible(kps):
+                    state.face_seen_frames += 1
 
                 # bbox size guard
                 bbox_w = bbox[2] - bbox[0]
@@ -258,26 +262,29 @@ class MonitoringService(QThread):
                         state.last_side = cur_side
                         if state.frames_seen >= MIN_VISIBLE_FRAMES and state.can_log(log_cooldown):
                             state.crossed = True
-                            result = "PASS" if state.passed_for_mode(sensitivity) else "FAIL"
-                            with QMutexLocker(self._mutex):
-                                counters["total"] += 1
-                                counters["pass" if result == "PASS" else "fail"] += 1
-                            img_path = ""
-                            if save_images:
-                                img_path = _save_capture(frame_mirror, bbox, track_id,
-                                                         result, capture_dir)
-                            state.last_log_time = time.time()
-                            self.crossing_event.emit({
-                                "track_id":   track_id,
-                                "result":     result,
-                                "mode":       sensitivity,
-                                "image_path": img_path,
-                                "ts":         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            })
-                            # reset checklist for next pass — only after a valid count
-                            state.completed.clear()
-                            state.gesture_start.clear()
-                            state.next_expected = 0
+                            should_log = (not require_face_to_log) or state.has_face_evidence()
+                            if should_log:
+                                result = "PASS" if state.passed_for_mode(sensitivity) else "FAIL"
+                                with QMutexLocker(self._mutex):
+                                    counters["total"] += 1
+                                    counters["pass" if result == "PASS" else "fail"] += 1
+                                img_path = ""
+                                if save_images:
+                                    img_path = _save_capture(frame_mirror, bbox, track_id,
+                                                             result, capture_dir)
+                                state.last_log_time = time.time()
+                                self.crossing_event.emit({
+                                    "track_id":   track_id,
+                                    "result":     result,
+                                    "mode":       sensitivity,
+                                    "image_path": img_path,
+                                    "ts":         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                })
+                                # reset checklist for next pass — only after a valid count
+                                state.completed.clear()
+                                state.gesture_start.clear()
+                                state.next_expected = 0
+                            # require_face_to_log=True และไม่เคยเห็นหน้า — ข้ามไปเลย ไม่นับ ไม่ log
 
                 _draw_person(frame_mirror, person, state, gesture, sensitivity, show_overlay)
 
@@ -299,21 +306,23 @@ class MonitoringService(QThread):
                 info = pending_exits.pop(gid)
                 st   = info["state"]
                 if not st.crossed and st.frames_seen >= MIN_VISIBLE_FRAMES:
-                    result = "PASS" if st.passed_for_mode(sensitivity) else "FAIL"
-                    with QMutexLocker(self._mutex):
-                        counters["total"] += 1
-                        counters["pass" if result == "PASS" else "fail"] += 1
-                    img_path = ""
-                    if save_images and info["bbox"] is not None:
-                        img_path = _save_capture(frame_mirror, info["bbox"],
-                                                 gid, result, capture_dir)
-                    self.crossing_event.emit({
-                        "track_id":   gid,
-                        "result":     result,
-                        "mode":       sensitivity,
-                        "image_path": img_path,
-                        "ts":         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    })
+                    should_log = (not require_face_to_log) or st.has_face_evidence()
+                    if should_log:
+                        result = "PASS" if st.passed_for_mode(sensitivity) else "FAIL"
+                        with QMutexLocker(self._mutex):
+                            counters["total"] += 1
+                            counters["pass" if result == "PASS" else "fail"] += 1
+                        img_path = ""
+                        if save_images and info["bbox"] is not None:
+                            img_path = _save_capture(frame_mirror, info["bbox"],
+                                                     gid, result, capture_dir)
+                        self.crossing_event.emit({
+                            "track_id":   gid,
+                            "result":     result,
+                            "mode":       sensitivity,
+                            "image_path": img_path,
+                            "ts":         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        })
 
             with QMutexLocker(self._mutex):
                 counters["in_zone"] = len(active_ids)

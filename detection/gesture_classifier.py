@@ -37,6 +37,15 @@ def get_kp(keypoints, idx):
     return (x, y, conf) if conf >= 0.3 else None
 
 
+def is_face_visible(keypoints, conf_threshold: float = 0.3) -> bool:
+    """
+    เช็คว่าเห็นหน้าคนไหม โดยดูจาก nose keypoint (COCO index 0)
+    confidence ต่ำ = โมเดลมองไม่เห็นใบหน้า (มักเกิดตอนคนหันหลังให้กล้อง)
+    """
+    nose = get_kp(keypoints, KP_NOSE)
+    return nose is not None
+
+
 def classify_pose_gesture(keypoints, mode: str = "STRICT", handsup_level: str = "waist"):
     """
     Classify pointing gesture from COCO pose keypoints.

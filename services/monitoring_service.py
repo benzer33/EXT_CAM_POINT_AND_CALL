@@ -323,7 +323,9 @@ class MonitoringService(QThread):
                                 state.next_expected = 0
                             # require_face_to_log=True และไม่เคยเห็นหน้า — ข้ามไปเลย ไม่นับ ไม่ log
 
-                _draw_person(frame_mirror, person, state, gesture, sensitivity, show_overlay)
+                _draw_person(frame_mirror, person, state, gesture, sensitivity, show_overlay,
+                             on_forklift=(enable_forklift_suppression and
+                                          state.has_forklift_evidence(min_forklift_frames)))
 
             gone = set(person_states.keys()) - active_ids
             for gid in gone:
@@ -367,6 +369,9 @@ class MonitoringService(QThread):
             with QMutexLocker(self._mutex):
                 counters["in_zone"] = len(active_ids)
 
+            if enable_forklift_suppression and forklift_boxes:
+                _draw_forklift_boxes(frame_mirror, forklift_boxes)
+
             if crossing_line.active:
                 _draw_crossing_line(frame_mirror, crossing_line)
 
@@ -401,7 +406,8 @@ COLOR_BLK  = (0,    0,   0)
 COLOR_CYAN = (255, 220,  0)
 
 
-def _draw_person(frame, person, state, gesture, sensitivity, show_overlay: bool = True):
+def _draw_person(frame, person, state, gesture, sensitivity, show_overlay: bool = True,
+                  on_forklift: bool = False):
     """
     Draw bbox, checklist label, gesture annotation, skeleton and optional debug overlay.
     Matches prototype draw_person_label + draw_skeleton + draw_debug_kp exactly.
@@ -435,6 +441,10 @@ def _draw_person(frame, person, state, gesture, sensitivity, show_overlay: bool 
     cv2.putText(frame, label, (x1 + 3, y1 - 4),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.55, COLOR_BLK, 2, cv2.LINE_AA)
 
+    if on_forklift:
+        cv2.putText(frame, "ON FORKLIFT - SKIPPED", (x1, y2 + 34),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 100, 255), 2, cv2.LINE_AA)
+
     # ── current gesture annotation ────────────────────────────────────────────
     if gesture and not passed:
         cv2.putText(frame, GESTURE_LABELS.get(gesture, gesture), (x1, y2 + 18),
@@ -455,6 +465,22 @@ def _draw_crossing_line(frame, line: CrossingLine):
     cv2.line(frame, p1, p2, (0, 220, 255), 2)
     cv2.circle(frame, p1, 5, (0, 220, 255), -1)
     cv2.circle(frame, p2, 5, (0, 220, 255), -1)
+
+
+def _draw_forklift_boxes(frame, forklift_boxes: list):
+    """
+    วาดกรอบโฟล์คลิฟท์ที่ตรวจพบ (สีม่วง/ส้ม แยกจากกรอบคนชัดเจน) พร้อม confidence
+    สำหรับ debug ดูด้วยตาว่าโมเดล forklift detector ทำงานถูกจุดไหม
+    """
+    COLOR_FORKLIFT = (200, 100, 255)   # ม่วงอ่อน (BGR) — ต่างจาก COLOR_PASS/COLOR_WARN ชัดเจน
+    for fb in forklift_boxes:
+        x1, y1, x2, y2 = [int(v) for v in fb.bbox]
+        cv2.rectangle(frame, (x1, y1), (x2, y2), COLOR_FORKLIFT, 3)
+        label = f"FORKLIFT {fb.conf:.2f}"
+        lw, lh = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)[0]
+        cv2.rectangle(frame, (x1, y1 - lh - 8), (x1 + lw + 6, y1), COLOR_FORKLIFT, -1)
+        cv2.putText(frame, label, (x1 + 3, y1 - 4),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 2, cv2.LINE_AA)
 
 
 def _draw_hud(frame, sensitivity: str, fps: float):

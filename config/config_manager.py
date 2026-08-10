@@ -41,6 +41,8 @@ DEFAULT_CONFIG: dict = {
     "capture_full_frame":   True,    # True = เต็มเฟรม (เห็นบริบท), False = crop เฉพาะคน (แบบเดิม)
     "retention_days":       30,
     "capture_dir":          os.path.join(BASE_DIR, "captures"),
+    "save_raw_training_frame": True,
+    "raw_capture_dir":      "",
     "crossing_line":        None,
     "teams_webhook":        "",
     "teams_send_pass":      False,

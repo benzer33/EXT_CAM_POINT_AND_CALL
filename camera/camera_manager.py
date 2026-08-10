@@ -35,7 +35,7 @@ def _build_gst_pipeline(rtsp_url: str, out_w: int, out_h: int, codec: str) -> st
         parser = "h264parse"
 
     return (
-        f"rtspsrc location={rtsp_url} latency=100 ! "
+        f"rtspsrc location={rtsp_url} latency=100 protocols=tcp ! "
         f"{depay} ! {parser} ! "
         f"nvv4l2decoder ! "
         f"nvvidconv output-buffers=1 interpolation-method=1 ! "

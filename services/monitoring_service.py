@@ -84,6 +84,9 @@ class MonitoringService(QThread):
         require_face_to_log = cfg.get("require_face_to_log", False)
         hold_sec     = cfg.get("hold_seconds", 0.3)
         save_images  = cfg.get("save_images", True)
+        save_images_on_pass = cfg.get("save_images_on_pass", False)
+        save_images_on_fail = cfg.get("save_images_on_fail", True)
+        capture_full_frame  = cfg.get("capture_full_frame", True)
         capture_dir  = cfg.get("capture_dir", "captures")
         log_cooldown = cfg.get("log_cooldown", 10.0)
         show_overlay   = cfg.get("show_debug_overlay", True)
@@ -306,9 +309,14 @@ class MonitoringService(QThread):
                                     counters["total"] += 1
                                     counters["pass" if result == "PASS" else "fail"] += 1
                                 img_path = ""
-                                if save_images:
+                                should_save = (
+                                    (result == "PASS" and save_images_on_pass) or
+                                    (result == "FAIL" and save_images_on_fail)
+                                )
+                                if should_save:
                                     img_path = _save_capture(frame_mirror, bbox, track_id,
-                                                             result, capture_dir)
+                                                             result, capture_dir,
+                                                             full_frame=capture_full_frame)
                                 state.last_log_time = time.time()
                                 self.crossing_event.emit({
                                     "track_id":   track_id,
@@ -334,6 +342,7 @@ class MonitoringService(QThread):
                     "state":      st,
                     "gone_since": time.time(),
                     "bbox":       getattr(st, "_last_bbox", None),
+                    "snapshot":   frame_mirror.copy(),   # เก็บเฟรมตอนคนยังอยู่จริง ก่อนหาย
                 }
 
             # flush expired pending_exits — คนที่หายเกิน grace period = เดินออกจริง
@@ -355,9 +364,14 @@ class MonitoringService(QThread):
                             counters["total"] += 1
                             counters["pass" if result == "PASS" else "fail"] += 1
                         img_path = ""
-                        if save_images and info["bbox"] is not None:
-                            img_path = _save_capture(frame_mirror, info["bbox"],
-                                                     gid, result, capture_dir)
+                        should_save = (
+                            (result == "PASS" and save_images_on_pass) or
+                            (result == "FAIL" and save_images_on_fail)
+                        )
+                        if should_save and info["bbox"] is not None and info.get("snapshot") is not None:
+                            img_path = _save_capture(info["snapshot"], info["bbox"],
+                                                     gid, result, capture_dir,
+                                                     full_frame=capture_full_frame)
                         self.crossing_event.emit({
                             "track_id":   gid,
                             "result":     result,
@@ -490,16 +504,26 @@ def _draw_hud(frame, sensitivity: str, fps: float):
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (80, 140, 200), 1)
 
 
-def _save_capture(frame, bbox, track_id: int, result: str, capture_dir: str) -> str:
+def _save_capture(frame, bbox, track_id: int, result: str, capture_dir: str,
+                   full_frame: bool = False) -> str:
     try:
-        x1, y1, x2, y2 = [int(v) for v in bbox]
-        pad = 20
-        h, w = frame.shape[:2]
-        crop = frame[max(0, y1-pad):min(h, y2+pad), max(0, x1-pad):min(w, x2+pad)]
         ts   = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         name = f"{ts}_{result}_id{track_id}.jpg"
         path = os.path.join(capture_dir, name)
-        cv2.imwrite(path, crop)
+        if full_frame:
+            out = frame.copy()
+            if bbox is not None:
+                x1, y1, x2, y2 = [int(v) for v in bbox]
+                cv2.rectangle(out, (x1, y1), (x2, y2), (0, 0, 255), 3)
+                cv2.putText(out, f"#{track_id} {result}", (x1, max(0, y1 - 10)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
+            cv2.imwrite(path, out)
+        else:
+            x1, y1, x2, y2 = [int(v) for v in bbox]
+            pad = 20
+            h, w = frame.shape[:2]
+            crop = frame[max(0, y1-pad):min(h, y2+pad), max(0, x1-pad):min(w, x2+pad)]
+            cv2.imwrite(path, crop)
         return path
     except Exception:
         return ""

@@ -36,6 +36,9 @@ DEFAULT_CONFIG: dict = {
     "min_forklift_frames":         3,       # ต้องเจอต่อเนื่องกี่เฟรมก่อนเชื่อว่าจริง
     "device":               "0",
     "save_images":          True,
+    "save_images_on_pass":  False,   # ไม่เก็บภาพตอน PASS (ประหยัดพื้นที่)
+    "save_images_on_fail":  True,    # เก็บภาพตอน FAIL (ใช้เป็นหลักฐาน)
+    "capture_full_frame":   True,    # True = เต็มเฟรม (เห็นบริบท), False = crop เฉพาะคน (แบบเดิม)
     "retention_days":       30,
     "capture_dir":          os.path.join(BASE_DIR, "captures"),
     "crossing_line":        None,

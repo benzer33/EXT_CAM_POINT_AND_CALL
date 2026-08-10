@@ -95,7 +95,7 @@ class MonitoringService(QThread):
         infer_every_n  = max(1, int(cfg.get("infer_every_n", 2)))
         os.makedirs(capture_dir, exist_ok=True)
         save_raw_on_fail = cfg.get("save_raw_training_frame", True)
-        raw_capture_dir  = cfg.get("raw_capture_dir", os.path.join(capture_dir, "raw_training"))
+        raw_capture_dir = cfg.get("raw_capture_dir") or os.path.join(capture_dir, "raw_training")
         if save_raw_on_fail:
             os.makedirs(raw_capture_dir, exist_ok=True)
 

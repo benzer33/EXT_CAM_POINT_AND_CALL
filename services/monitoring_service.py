@@ -94,6 +94,10 @@ class MonitoringService(QThread):
         # ค่า default=2 หมายถึง inference 1 ใน 2 เฟรม (ลด CPU/GPU load ~50%)
         infer_every_n  = max(1, int(cfg.get("infer_every_n", 2)))
         os.makedirs(capture_dir, exist_ok=True)
+        save_raw_on_fail = cfg.get("save_raw_training_frame", True)
+        raw_capture_dir  = cfg.get("raw_capture_dir", os.path.join(capture_dir, "raw_training"))
+        if save_raw_on_fail:
+            os.makedirs(raw_capture_dir, exist_ok=True)
 
         MIN_VISIBLE_FRAMES  = cfg.get("min_visible_frames",  8)
         MIN_BBOX_HEIGHT_REL = cfg.get("min_bbox_height_rel", 0.15)
@@ -177,7 +181,7 @@ class MonitoringService(QThread):
                 time.sleep(0.05)
                 continue
 
-            frame_idx    += 1
+            raw_snapshot = frame_raw.copy() if save_raw_on_fail else None
             run_inference = (frame_idx % infer_every_n == 0)
 
             if run_inference:
@@ -339,10 +343,11 @@ class MonitoringService(QThread):
             for gid in gone:
                 st = person_states.pop(gid)
                 pending_exits[gid] = {
-                    "state":      st,
-                    "gone_since": time.time(),
-                    "bbox":       getattr(st, "_last_bbox", None),
-                    "snapshot":   frame_mirror.copy(),   # เก็บเฟรมตอนคนยังอยู่จริง ก่อนหาย
+                    "state":        st,
+                    "gone_since":   time.time(),
+                    "bbox":         getattr(st, "_last_bbox", None),
+                    "snapshot":     frame_mirror.copy(),   # เก็บเฟรมตอนคนยังอยู่จริง ก่อนหาย
+                    "raw_snapshot": raw_snapshot,          # เฟรมดิบสำหรับ retrain
                 }
 
             # flush expired pending_exits — คนที่หายเกิน grace period = เดินออกจริง
@@ -372,6 +377,10 @@ class MonitoringService(QThread):
                             img_path = _save_capture(info["snapshot"], info["bbox"],
                                                      gid, result, capture_dir,
                                                      full_frame=capture_full_frame)
+                        if result == "FAIL" and save_raw_on_fail and info.get("raw_snapshot") is not None:
+                            ts_raw  = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                            raw_path = os.path.join(raw_capture_dir, f"{ts_raw}_raw_id{gid}.jpg")
+                            cv2.imwrite(raw_path, info["raw_snapshot"])
                         self.crossing_event.emit({
                             "track_id":   gid,
                             "result":     result,

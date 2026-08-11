@@ -233,7 +233,12 @@ class DashboardPage(QWidget):
         )
         self._btn_save_zone.clicked.connect(self._save_zone_to_config)
 
-        for btn in (self._btn_start, self._btn_stop, self._btn_reset, self._btn_save_zone):
+        self._btn_manual_capture = QPushButton("📷 Capture for Training")
+        self._btn_manual_capture.setObjectName("ManualCaptureButton")
+        self._btn_manual_capture.clicked.connect(self._on_manual_capture)
+
+        for btn in (self._btn_start, self._btn_stop, self._btn_reset,
+                    self._btn_save_zone, self._btn_manual_capture):
             btn.setFixedWidth(140)
             vbox.addWidget(btn)
 
@@ -328,6 +333,7 @@ class DashboardPage(QWidget):
         self._service.crossing_event.connect(self._on_crossing)
         self._service.status_changed.connect(self.status_message)
         self._service.error_occurred.connect(self._on_error)
+        self._service.manual_capture_saved.connect(self._on_manual_capture_saved)
         self._service.start()
         # restore zone into service
         if self._zone_saved:
@@ -404,6 +410,19 @@ class DashboardPage(QWidget):
     def _on_error(self, msg: str):
         self.status_message.emit(f"ERROR: {msg}")
         self.stop_monitoring()
+
+    def _on_manual_capture(self):
+        """ปุ่มถ่ายรูปแมนนวลถูกกด — ส่งคำขอไปให้ service (ถ้ากำลังรันอยู่)"""
+        if self._service and self._service.isRunning():
+            self._service.request_manual_capture()
+        else:
+            self.status_message.emit("⚠ ต้องกด START ก่อนถึงจะถ่ายรูปได้")
+
+    @pyqtSlot(str)
+    def _on_manual_capture_saved(self, path: str):
+        """แจ้งผลลัพธ์สั้นๆ ตอนบันทึกสำเร็จ (ไม่ต้อง popup กันขัดจังหวะการกดรัวๆ)"""
+        import os as _os
+        self.status_message.emit(f"✓ บันทึกภาพเทรนแล้ว: {_os.path.basename(path)}")
 
     @pyqtSlot(object)
     def on_camera_source_changed(self, source):

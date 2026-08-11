@@ -27,7 +27,8 @@ class MonitoringService(QThread):
     stats_updated  = pyqtSignal(dict)
     crossing_event = pyqtSignal(dict)
     status_changed = pyqtSignal(str)
-    error_occurred = pyqtSignal(str)
+    error_occurred        = pyqtSignal(str)
+    manual_capture_saved  = pyqtSignal(str)   # ส่ง path ของไฟล์ที่บันทึกสำเร็จ
 
     def __init__(self, cfg: dict, parent=None):
         super().__init__(parent)
@@ -39,6 +40,8 @@ class MonitoringService(QThread):
         self._person_states: dict[int, PersonState] = {}
         # optional detection zone: only count people inside this polygon
         self._det_zone: list[tuple[int,int]] | None = None
+        self._manual_capture_pending = 0   # จำนวนครั้งที่กดค้างไว้ (รองรับกดรัวๆ)
+        self._manual_capture_dir = None    # ตั้งค่าจริงใน run() ตอนอ่าน config
 
         cl_cfg = cfg.get("crossing_line")
         if cl_cfg:
@@ -73,6 +76,13 @@ class MonitoringService(QThread):
             self._counters = {"total": 0, "pass": 0, "fail": 0, "in_zone": 0}
             self._person_states.clear()
 
+    def request_manual_capture(self):
+        """เรียกจาก UI thread ตอนกดปุ่มถ่ายรูปแมนนวล — เพิ่ม pending count
+        ให้ thread หลักไปบันทึกเฟรมปัจจุบันในรอบถัดไป กดซ้ำได้ไม่จำกัด รองรับกดรัวๆ
+        เพราะแค่เพิ่มตัวเลข ไม่ทำงานหนักตรงนี้เลย"""
+        with QMutexLocker(self._mutex):
+            self._manual_capture_pending += 1
+
     def stop(self):
         self._running = False
 
@@ -98,6 +108,9 @@ class MonitoringService(QThread):
         raw_capture_dir = cfg.get("raw_capture_dir") or os.path.join(capture_dir, "raw_training")
         if save_raw_on_fail:
             os.makedirs(raw_capture_dir, exist_ok=True)
+        manual_capture_dir = cfg.get("manual_capture_dir") or os.path.join(capture_dir, "manual_training")
+        os.makedirs(manual_capture_dir, exist_ok=True)
+        self._manual_capture_dir = manual_capture_dir
 
         MIN_VISIBLE_FRAMES  = cfg.get("min_visible_frames",  8)
         MIN_BBOX_HEIGHT_REL = cfg.get("min_bbox_height_rel", 0.15)
@@ -182,7 +195,16 @@ class MonitoringService(QThread):
                 continue
 
             raw_snapshot = frame_raw.copy() if save_raw_on_fail else None
-            run_inference = (frame_idx % infer_every_n == 0)
+
+            with QMutexLocker(self._mutex):
+                pending = self._manual_capture_pending
+                if pending > 0:
+                    self._manual_capture_pending -= 1
+            if pending > 0:
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                manual_path = os.path.join(manual_capture_dir, f"manual_{ts}.jpg")
+                cv2.imwrite(manual_path, frame_raw)
+                self.manual_capture_saved.emit(manual_path)
 
             if run_inference:
                 # รัน YOLO inference เต็มๆ และเก็บผลลัพธ์ไว้ reuse

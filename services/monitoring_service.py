@@ -328,7 +328,9 @@ class MonitoringService(QThread):
                         state.last_side = cur_side
                         if state.initial_side == 0:
                             state.initial_side = cur_side
+                        print(f"[DEBUG-DIRECTION] track={track_id} เจอครั้งแรก ที่ side={cur_side}")
                     elif cur_side != state.last_side:
+                        print(f"[DEBUG-DIRECTION] track={track_id} ข้ามฝั่ง: {state.last_side} -> {cur_side}")
                         state.last_side = cur_side
                         if state.frames_seen >= MIN_VISIBLE_FRAMES and state.can_log(log_cooldown):
                             state.crossed = True

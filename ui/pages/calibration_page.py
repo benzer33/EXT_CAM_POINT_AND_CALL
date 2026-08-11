@@ -147,7 +147,8 @@ class CalibrationPage(QWidget):
         frame = self._camera.read()
         if frame is None:
             return
-        frame = cv2.flip(frame, 1)
+        if self._cfg.get("mirror_feed", False):
+            frame = cv2.flip(frame, 1)
         rgb   = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         h, w, ch = rgb.shape
         img = QImage(rgb.data, w, h, ch * w, QImage.Format_RGB888).copy()

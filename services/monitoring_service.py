@@ -206,6 +206,8 @@ class MonitoringService(QThread):
                 cv2.imwrite(manual_path, frame_raw)
                 self.manual_capture_saved.emit(manual_path)
 
+            frame_idx    += 1
+            run_inference = (frame_idx % infer_every_n == 0)
             if run_inference:
                 # รัน YOLO inference เต็มๆ และเก็บผลลัพธ์ไว้ reuse
                 frame_mirror, det_result = detector.process(frame_raw, mirror=mirror)

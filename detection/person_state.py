@@ -23,6 +23,7 @@ class PersonState:
     frames_seen:            int   = 0
     face_seen_frames:       int   = 0   # จำนวนเฟรมที่เห็นหน้าคนนี้ (nose keypoint confident)
     forklift_overlap_frames: int  = 0   # จำนวนเฟรมที่พบว่าอยู่ในโฟล์คลิฟท์
+    initial_side:            int  = 0   # ฝั่งแรกที่เจอคนคนนี้ (ตั้งครั้งเดียวตอนเจอครั้งแรก)
 
     def reset(self):
         self.completed.clear()
@@ -32,12 +33,26 @@ class PersonState:
         self.last_log_time          = 0.0
         self.face_seen_frames       = 0
         self.forklift_overlap_frames = 0
+        self.initial_side           = 0
         self.next_expected          = 0
         self.frames_seen            = 0
 
     def has_face_evidence(self) -> bool:
         """True ถ้าเคยเห็นหน้าคนนี้อย่างน้อย 1 เฟรมตลอดที่ track อยู่"""
         return self.face_seen_frames > 0
+
+    def has_correct_direction(self, required_from_side: int, required_to_side: int) -> bool:
+        """
+        True ถ้าทิศทางการเดินตรงกับที่กำหนด (เดินจาก required_from_side
+        ไป required_to_side) — ถ้ายังไม่เคยข้ามฝั่งเลย (initial_side == last_side)
+        ถือว่ายังสรุปทิศทางไม่ได้ คืน False ไปก่อน (รอจนกว่าจะข้ามจริง)
+        """
+        if self.initial_side == 0 or self.last_side == 0:
+            return False
+        if self.initial_side == self.last_side:
+            return False   # ยังไม่ข้ามฝั่ง สรุปทิศทางไม่ได้
+        return (self.initial_side == required_from_side and
+                self.last_side == required_to_side)
 
     def has_forklift_evidence(self, min_frames: int = 3) -> bool:
         """True ถ้าพบว่าอยู่ในโฟล์คลิฟท์ต่อเนื่องอย่างน้อย min_frames เฟรม"""

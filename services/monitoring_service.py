@@ -92,6 +92,9 @@ class MonitoringService(QThread):
         sensitivity  = cfg.get("sensitivity",   "STRICT")
         handsup_level = cfg.get("handsup_level", "waist")
         require_face_to_log = cfg.get("require_face_to_log", False)
+        require_direction_gate = cfg.get("require_direction_gate", False)
+        direction_from_side    = cfg.get("direction_from_side", -1)
+        direction_to_side      = cfg.get("direction_to_side", 1)
         hold_sec     = cfg.get("hold_seconds", 0.3)
         save_images  = cfg.get("save_images", True)
         save_images_on_pass = cfg.get("save_images_on_pass", False)
@@ -323,6 +326,8 @@ class MonitoringService(QThread):
 
                     if state.last_side == 0:
                         state.last_side = cur_side
+                        if state.initial_side == 0:
+                            state.initial_side = cur_side
                     elif cur_side != state.last_side:
                         state.last_side = cur_side
                         if state.frames_seen >= MIN_VISIBLE_FRAMES and state.can_log(log_cooldown):
@@ -330,6 +335,8 @@ class MonitoringService(QThread):
                             should_log = (
                                 ((not require_face_to_log) or state.has_face_evidence())
                                 and not (enable_forklift_suppression and state.has_forklift_evidence(min_forklift_frames))
+                                and ((not require_direction_gate) or
+                                     state.has_correct_direction(direction_from_side, direction_to_side))
                             )
                             if should_log:
                                 result = "PASS" if state.passed_for_mode(sensitivity) else "FAIL"
@@ -386,6 +393,8 @@ class MonitoringService(QThread):
                     should_log = (
                         ((not require_face_to_log) or st.has_face_evidence())
                         and not (enable_forklift_suppression and st.has_forklift_evidence(min_forklift_frames))
+                        and ((not require_direction_gate) or
+                             st.has_correct_direction(direction_from_side, direction_to_side))
                     )
                     if should_log:
                         result = "PASS" if st.passed_for_mode(sensitivity) else "FAIL"

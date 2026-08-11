@@ -28,6 +28,9 @@ DEFAULT_CONFIG: dict = {
     "sensitivity":          "STRICT",
     "handsup_level":         "waist",   # "waist" | "chest" | "shoulder" — ระดับเกณฑ์โหมด HANDSUP
     "require_face_to_log":        False,     # True = นับ PASS/FAIL เฉพาะตอนเจอหน้าคน | False = นับทุกกรณีเหมือนเดิม
+    "require_direction_gate":     False,     # เปิด/ปิด — เช็คทิศทางการเดินก่อนนับ PASS/FAIL
+    "direction_from_side":        -1,        # ฝั่งเริ่มต้นที่ต้องมี (1 หรือ -1 ตาม CrossingLine.side())
+    "direction_to_side":           1,        # ฝั่งปลายทางที่ต้องไปถึง
     "enable_forklift_suppression": False,   # เปิด/ปิด feature (default ปิด)
     "forklift_model_path":         "models/forklift_best.pt",
     "forklift_conf_threshold":     0.4,

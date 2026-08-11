@@ -73,7 +73,15 @@ class DetectionPage(QWidget):
         fk_vbox.addWidget(self._forklift_suppress_chk)
         root.addWidget(fk_group)
 
-        # ── advanced parameters ───────────────────────────────────────────────
+        # ── direction gate ───────────────────────────────────────────────
+        dg_group = QGroupBox("Direction Gate")
+        dg_vbox  = QVBoxLayout(dg_group)
+        self._direction_gate_chk = QCheckBox(
+            "ตรวจทิศทางการเดินก่อนนับ PASS/FAIL — ต้องตั้งเส้น Crossing Line ใน "
+            "หน้า Calibration ก่อนถึงจะใช้งานได้จริง"
+        )
+        dg_vbox.addWidget(self._direction_gate_chk)
+        root.addWidget(dg_group)
         adv_group = QGroupBox("Advanced Parameters")
         form = QFormLayout(adv_group)
         form.setLabelAlignment(Qt.AlignLeft)
@@ -175,6 +183,7 @@ class DetectionPage(QWidget):
         self._overlay_chk.setChecked(self._cfg.get("show_debug_overlay", True))
         self._require_face_chk.setChecked(self._cfg.get("require_face_to_log", False))
         self._forklift_suppress_chk.setChecked(self._cfg.get("enable_forklift_suppression", False))
+        self._direction_gate_chk.setChecked(self._cfg.get("require_direction_gate", False))
         self._conf_spin.setValue(    self._cfg.get("conf_threshold",    0.50))
         self._hold_spin.setValue(    self._cfg.get("hold_seconds",      0.30))
         self._cooldown_spin.setValue(self._cfg.get("log_cooldown",     10.0))
@@ -206,6 +215,7 @@ class DetectionPage(QWidget):
         self._cfg["show_debug_overlay"]          = self._overlay_chk.isChecked()
         self._cfg["require_face_to_log"]          = self._require_face_chk.isChecked()
         self._cfg["enable_forklift_suppression"]  = self._forklift_suppress_chk.isChecked()
+        self._cfg["require_direction_gate"]        = self._direction_gate_chk.isChecked()
         self._cfg["conf_threshold"]      = self._conf_spin.value()
         self._cfg["hold_seconds"]        = self._hold_spin.value()
         self._cfg["log_cooldown"]        = self._cooldown_spin.value()

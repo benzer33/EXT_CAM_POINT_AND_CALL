@@ -170,9 +170,26 @@ class CalibrationPage(QWidget):
 
     def _save(self):
         p1, p2 = self._preview.get_line()
-        if p1 and p2:
-            self._cfg["crossing_line"] = {"p1": list(p1), "p2": list(p2)}
-            ConfigManager().save(self._cfg)
-            self._status_lbl.setText("✔ Crossing line saved")
-        else:
+        if not (p1 and p2):
             self._status_lbl.setText("Draw a line first")
+            return
+
+        pm = self._preview.pixmap()
+        actual_w, actual_h = self._camera.get_resolution()
+
+        if pm and not pm.isNull() and actual_w and actual_h:
+            disp_w, disp_h = pm.width(), pm.height()
+            sx = actual_w / disp_w
+            sy = actual_h / disp_h
+            p1_scaled = (p1[0] * sx, p1[1] * sy)
+            p2_scaled = (p2[0] * sx, p2[1] * sy)
+        else:
+            # ไม่รู้ความละเอียดจริง — เก็บดิบไปก่อน (ไม่ควรเกิดขึ้นถ้ากล้องต่ออยู่)
+            p1_scaled, p2_scaled = p1, p2
+
+        self._cfg["crossing_line"] = {
+            "p1": [round(p1_scaled[0]), round(p1_scaled[1])],
+            "p2": [round(p2_scaled[0]), round(p2_scaled[1])],
+        }
+        ConfigManager().save(self._cfg)
+        self._status_lbl.setText("✔ Crossing line saved")

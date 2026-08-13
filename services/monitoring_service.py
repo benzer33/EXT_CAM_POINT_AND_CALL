@@ -377,8 +377,6 @@ class MonitoringService(QThread):
                                 ((not require_face_to_log) or state.has_face_evidence())
                                 and not (enable_forklift_suppression and state.has_forklift_evidence(min_forklift_frames))
                                 and ((not require_direction_gate) or
-                                     state.has_correct_direction(direction_from_side, direction_to_side))
-                                and ((not require_direction_gate) or
                                      state.has_correct_gate_direction(gate1_first_required))
                             )
                             if should_log:
@@ -436,8 +434,6 @@ class MonitoringService(QThread):
                     should_log = (
                         ((not require_face_to_log) or st.has_face_evidence())
                         and not (enable_forklift_suppression and st.has_forklift_evidence(min_forklift_frames))
-                        and ((not require_direction_gate) or
-                             st.has_correct_direction(direction_from_side, direction_to_side))
                         and ((not require_direction_gate) or
                              st.has_correct_gate_direction(gate1_first_required))
                     )

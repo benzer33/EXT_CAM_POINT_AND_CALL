@@ -36,9 +36,9 @@ class DetectionPage(QWidget):
         # ── sensitivity ───────────────────────────────────────────────────────
         sens_group = QGroupBox("Sensitivity Mode")
         sens_vbox  = QVBoxLayout(sens_group)
-        self._rb_strict   = QRadioButton("Strict   —  requires correct order R → L → S, wrist must reach threshold")
+        self._rb_strict   = QRadioButton("Strict   —  เข้มงวด ต้องชี้ขวา ซ้าย ตรง ตามลำดับ แนวหัวไหล่")
         self._rb_handsup  = QRadioButton("Handsup  —  ยกมือสองข้างขึ้นเหนือเอว (LEFT → RIGHT → HANDSUP)")
-        self._rb_loose    = QRadioButton("Loose    —  any order, no height requirement (L + R only)")
+        self._rb_loose    = QRadioButton("Loose    —  แค่โยกซ้ายโยกขวา สูงระดับใดก็ได้ ก็ผ่านแล้ว")
         for rb in (self._rb_strict, self._rb_handsup, self._rb_loose):
             sens_vbox.addWidget(rb)
         root.addWidget(sens_group)
@@ -55,7 +55,7 @@ class DetectionPage(QWidget):
 
         vis_group = QGroupBox("Visualisation")
         vis_vbox  = QVBoxLayout(vis_group)
-        self._overlay_chk = QCheckBox("Show shoulder reference lines and wrist dots on live feed")
+        self._overlay_chk = QCheckBox("แสดงเส้นอ้างอิงไหล่และจุดข้อมือบนฟีดสด")
         self._require_face_chk = QCheckBox(
             "นับ PASS/FAIL เฉพาะตอนเจอหน้าคน — คนที่หันหลังให้กล้องจะไม่ถูกนับทั้ง PASS และ FAIL"
         )
@@ -77,8 +77,7 @@ class DetectionPage(QWidget):
         dg_group = QGroupBox("Direction Gate")
         dg_vbox  = QVBoxLayout(dg_group)
         self._direction_gate_chk = QCheckBox(
-            "ตรวจทิศทางการเดินก่อนนับ PASS/FAIL — ต้องตั้งเส้น Crossing Line ใน "
-            "หน้า Calibration ก่อนถึงจะใช้งานได้จริง"
+            "ตรวจทิศทางการเดินก่อนนับ PASS/FAIL — ต้องตั้งโซนตามลำดับ 0-1 > 2-3 "
         )
         dg_vbox.addWidget(self._direction_gate_chk)
         root.addWidget(dg_group)

@@ -314,10 +314,11 @@ class MonitoringService(QThread):
                         state.gate2_initial_side = side2
                         state.gate2_last_side    = side2
                     elif side2 != state.gate2_last_side:
+                        old_side2 = state.gate2_last_side
                         state.gate2_last_side = side2
                         if state.gate2_crossed_at is None:
                             state.gate2_crossed_at = time.time()
-                            print(f"[DEBUG-GATE] track={track_id} ผ่านประตู 2 (edge[2]-[3])")
+                            print(f"[DEBUG-GATE] track={track_id} ผ่านประตู 2: side {old_side2} -> {side2}")
                 if kps is not None and is_face_visible(kps):
                     state.face_seen_frames += 1
                 if enable_forklift_suppression and forklift_boxes:

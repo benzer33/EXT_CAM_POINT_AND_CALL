@@ -31,6 +31,7 @@ DEFAULT_CONFIG: dict = {
     "require_direction_gate":     False,     # เปิด/ปิด — เช็คทิศทางการเดินก่อนนับ PASS/FAIL
     "direction_from_side":        -1,        # ฝั่งเริ่มต้นที่ต้องมี (1 หรือ -1 ตาม CrossingLine.side())
     "direction_to_side":           1,        # ฝั่งปลายทางที่ต้องไปถึง
+    "gate1_first":                 True,     # True = ต้องผ่าน edge[0]-[1] ก่อน edge[2]-[3] ถึงนับว่าถูกทิศทาง
     "enable_forklift_suppression": False,   # เปิด/ปิด feature (default ปิด)
     "forklift_model_path":         "models/forklift_best.pt",
     "forklift_conf_threshold":     0.4,

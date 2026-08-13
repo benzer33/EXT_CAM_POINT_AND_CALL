@@ -24,6 +24,12 @@ class PersonState:
     face_seen_frames:       int   = 0   # จำนวนเฟรมที่เห็นหน้าคนนี้ (nose keypoint confident)
     forklift_overlap_frames: int  = 0   # จำนวนเฟรมที่พบว่าอยู่ในโฟล์คลิฟท์
     initial_side:            int  = 0   # ฝั่งแรกที่เจอคนคนนี้ (ตั้งครั้งเดียวตอนเจอครั้งแรก)
+    gate1_crossed_at:        float | None = None
+    gate2_crossed_at:        float | None = None
+    gate1_initial_side:      int  = 0
+    gate1_last_side:         int  = 0
+    gate2_initial_side:      int  = 0
+    gate2_last_side:         int  = 0
 
     def reset(self):
         self.completed.clear()
@@ -34,6 +40,12 @@ class PersonState:
         self.face_seen_frames       = 0
         self.forklift_overlap_frames = 0
         self.initial_side           = 0
+        self.gate1_crossed_at       = None
+        self.gate2_crossed_at       = None
+        self.gate1_initial_side     = 0
+        self.gate1_last_side        = 0
+        self.gate2_initial_side     = 0
+        self.gate2_last_side        = 0
         self.next_expected          = 0
         self.frames_seen            = 0
 
@@ -53,6 +65,13 @@ class PersonState:
             return False   # ยังไม่ข้ามฝั่ง สรุปทิศทางไม่ได้
         return (self.initial_side == required_from_side and
                 self.last_side == required_to_side)
+
+    def has_correct_gate_direction(self, gate1_first: bool = True) -> bool:
+        if self.gate1_crossed_at is None or self.gate2_crossed_at is None:
+            return False
+        if gate1_first:
+            return self.gate1_crossed_at < self.gate2_crossed_at
+        return self.gate2_crossed_at < self.gate1_crossed_at
 
     def has_forklift_evidence(self, min_frames: int = 3) -> bool:
         """True ถ้าพบว่าอยู่ในโฟล์คลิฟท์ต่อเนื่องอย่างน้อย min_frames เฟรม"""

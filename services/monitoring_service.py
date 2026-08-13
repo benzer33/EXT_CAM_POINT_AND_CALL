@@ -95,6 +95,9 @@ class MonitoringService(QThread):
         require_direction_gate = cfg.get("require_direction_gate", False)
         direction_from_side    = cfg.get("direction_from_side", -1)
         direction_to_side      = cfg.get("direction_to_side", 1)
+        gate1_first_required   = cfg.get("gate1_first", True)
+        gate1_line = None
+        gate2_line = None
         hold_sec     = cfg.get("hold_seconds", 0.3)
         save_images  = cfg.get("save_images", True)
         save_images_on_pass = cfg.get("save_images_on_pass", False)
@@ -236,6 +239,18 @@ class MonitoringService(QThread):
 
             fh, fw = frame_mirror.shape[:2]
 
+            if require_direction_gate and gate1_line is None:
+                with QMutexLocker(self._mutex):
+                    _dz = self._det_zone
+                    _dz_w = getattr(self, "_det_zone_saved_w", fw)
+                    _dz_h = getattr(self, "_det_zone_saved_h", fh)
+                if _dz and len(_dz) == 4:
+                    _z = Zone("direction_gate", [tuple(p) for p in _dz])
+                    _sc = _z.scale_to(_dz_w, _dz_h, fw, fh)
+                    pts = _sc.points
+                    gate1_line = CrossingLine(p1=pts[0], p2=pts[1], active=True)
+                    gate2_line = CrossingLine(p1=pts[2], p2=pts[3], active=True)
+
             with QMutexLocker(self._mutex):
                 crossing_line = self._crossing_line
 
@@ -279,6 +294,30 @@ class MonitoringService(QThread):
                 state = person_states[track_id]
                 state.frames_seen += 1
                 state._last_bbox = bbox   # keep latest bbox for gone-handler capture
+
+                if require_direction_gate and gate1_line is not None:
+                    foot_x_g = (bbox[0] + bbox[2]) / 2
+                    foot_y_g = bbox[3]
+
+                    side1 = gate1_line.side(foot_x_g, foot_y_g)
+                    if state.gate1_initial_side == 0:
+                        state.gate1_initial_side = side1
+                        state.gate1_last_side    = side1
+                    elif side1 != state.gate1_last_side:
+                        state.gate1_last_side = side1
+                        if state.gate1_crossed_at is None:
+                            state.gate1_crossed_at = time.time()
+                            print(f"[DEBUG-GATE] track={track_id} ผ่านประตู 1 (edge[0]-[1])")
+
+                    side2 = gate2_line.side(foot_x_g, foot_y_g)
+                    if state.gate2_initial_side == 0:
+                        state.gate2_initial_side = side2
+                        state.gate2_last_side    = side2
+                    elif side2 != state.gate2_last_side:
+                        state.gate2_last_side = side2
+                        if state.gate2_crossed_at is None:
+                            state.gate2_crossed_at = time.time()
+                            print(f"[DEBUG-GATE] track={track_id} ผ่านประตู 2 (edge[2]-[3])")
                 if kps is not None and is_face_visible(kps):
                     state.face_seen_frames += 1
                 if enable_forklift_suppression and forklift_boxes:
@@ -339,6 +378,8 @@ class MonitoringService(QThread):
                                 and not (enable_forklift_suppression and state.has_forklift_evidence(min_forklift_frames))
                                 and ((not require_direction_gate) or
                                      state.has_correct_direction(direction_from_side, direction_to_side))
+                                and ((not require_direction_gate) or
+                                     state.has_correct_gate_direction(gate1_first_required))
                             )
                             if should_log:
                                 result = "PASS" if state.passed_for_mode(sensitivity) else "FAIL"
@@ -397,6 +438,8 @@ class MonitoringService(QThread):
                         and not (enable_forklift_suppression and st.has_forklift_evidence(min_forklift_frames))
                         and ((not require_direction_gate) or
                              st.has_correct_direction(direction_from_side, direction_to_side))
+                        and ((not require_direction_gate) or
+                             st.has_correct_gate_direction(gate1_first_required))
                     )
                     if should_log:
                         result = "PASS" if st.passed_for_mode(sensitivity) else "FAIL"

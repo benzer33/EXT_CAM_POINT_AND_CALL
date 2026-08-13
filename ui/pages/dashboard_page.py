@@ -115,6 +115,8 @@ class DashboardPage(QWidget):
         raw = cfg.get("dashboard_zone", [])
         if raw:
             self._zone_saved = [tuple(p) for p in raw]
+            self._zone_lbl_w = cfg.get("dashboard_zone_w", 1) or 1
+            self._zone_lbl_h = cfg.get("dashboard_zone_h", 1) or 1
 
         self._build_ui()
 

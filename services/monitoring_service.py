@@ -96,6 +96,7 @@ class MonitoringService(QThread):
         direction_from_side    = cfg.get("direction_from_side", -1)
         direction_to_side      = cfg.get("direction_to_side", 1)
         gate1_first_required   = cfg.get("gate1_first", True)
+        gate2_entering_side_val    = cfg.get("gate2_entering_side", 1)
         gate1_line = None
         gate2_line = None
         hold_sec     = cfg.get("hold_seconds", 0.3)
@@ -378,7 +379,7 @@ class MonitoringService(QThread):
                                 ((not require_face_to_log) or state.has_face_evidence())
                                 and not (enable_forklift_suppression and state.has_forklift_evidence(min_forklift_frames))
                                 and ((not require_direction_gate) or
-                                     state.has_correct_gate_direction(gate1_first_required))
+                                     state.has_correct_gate_direction(gate1_first_required, gate2_entering_side_val))
                             )
                             if should_log:
                                 result = "PASS" if state.passed_for_mode(sensitivity) else "FAIL"

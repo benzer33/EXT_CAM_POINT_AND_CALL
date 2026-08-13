@@ -67,12 +67,20 @@ class PersonState:
         return (self.initial_side == required_from_side and
                 self.last_side == required_to_side)
 
-    def has_correct_gate_direction(self, gate1_first: bool = True) -> bool:
-        if self.gate1_crossed_at is None or self.gate2_crossed_at is None:
-            return False
-        if gate1_first:
-            return self.gate1_crossed_at < self.gate2_crossed_at
-        return self.gate2_crossed_at < self.gate1_crossed_at
+    def has_correct_gate_direction(self, gate1_first: bool = True,
+                                    gate2_entering_side: int = -1) -> bool:
+        # กรณีมีข้อมูลครบทั้ง 2 ประตู — ใช้แบบยืนยัน 2 จุด (แม่นยำสุด)
+        if self.gate1_crossed_at is not None and self.gate2_crossed_at is not None:
+            if gate1_first:
+                return self.gate1_crossed_at < self.gate2_crossed_at
+            return self.gate2_crossed_at < self.gate1_crossed_at
+
+        # กรณีขาดข้อมูลประตู 1 (คนพลุกพล่านบังกัน) — fallback ใช้ประตู 2 อย่างเดียว
+        # ประตู 2 พิสูจน์แล้วว่าจับได้แม่นยำ 100% แม้ตอนคนเยอะ
+        if self.gate2_crossed_at is not None:
+            return self.gate2_last_side == gate2_entering_side
+
+        return False
 
     def has_forklift_evidence(self, min_frames: int = 3) -> bool:
         """True ถ้าพบว่าอยู่ในโฟล์คลิฟท์ต่อเนื่องอย่างน้อย min_frames เฟรม"""

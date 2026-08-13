@@ -2,6 +2,7 @@
 PersonState — per-track checklist and crossing state.
 Logic matches original prototype exactly.
 """
+from __future__ import annotations   # ← เพิ่มบรรทัดนี้
 import time
 from dataclasses import dataclass, field
 

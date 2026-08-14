@@ -3,6 +3,7 @@ MonitoringService — QThread detection pipeline.
 """
 from __future__ import annotations
 import os, time, cv2, numpy as np
+from collections import deque
 from datetime import datetime
 
 from PyQt5.QtCore import QThread, pyqtSignal, QMutex, QMutexLocker
@@ -118,6 +119,16 @@ class MonitoringService(QThread):
         manual_capture_dir = cfg.get("manual_capture_dir") or os.path.join(capture_dir, "manual_training")
         os.makedirs(manual_capture_dir, exist_ok=True)
         self._manual_capture_dir = manual_capture_dir
+        save_video_on_fail    = cfg.get("save_video_on_fail", True)
+        video_buffer_seconds  = cfg.get("video_buffer_seconds", 3)
+        video_buffer_fps      = cfg.get("video_buffer_fps", 10)
+        video_output_dir      = cfg.get("video_output_dir") or os.path.join(capture_dir, "videos")
+        if save_video_on_fail:
+            os.makedirs(video_output_dir, exist_ok=True)
+        _tracker_fps_val       = cfg.get("tracker_frame_rate", 20)
+        _video_buffer_maxlen   = max(1, video_buffer_seconds * video_buffer_fps)
+        _video_frame_buffer: deque = deque(maxlen=_video_buffer_maxlen)
+        _video_buffer_every_n  = max(1, round(_tracker_fps_val / video_buffer_fps))
 
         MIN_VISIBLE_FRAMES  = cfg.get("min_visible_frames",  8)
         MIN_BBOX_HEIGHT_REL = cfg.get("min_bbox_height_rel", 0.15)
@@ -203,7 +214,8 @@ class MonitoringService(QThread):
 
             raw_snapshot = frame_raw.copy() if save_raw_on_fail else None
 
-            with QMutexLocker(self._mutex):
+            if save_video_on_fail and frame_idx % _video_buffer_every_n == 0:
+                _video_frame_buffer.append(frame_raw.copy())
                 pending = self._manual_capture_pending
                 if pending > 0:
                     self._manual_capture_pending -= 1
@@ -457,11 +469,27 @@ class MonitoringService(QThread):
                             ts_raw  = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
                             raw_path = os.path.join(raw_capture_dir, f"{ts_raw}_raw_id{gid}.jpg")
                             cv2.imwrite(raw_path, info["raw_snapshot"])
+                        video_path = ""
+                        if save_video_on_fail and result == "FAIL" and len(_video_frame_buffer) >= 2:
+                            ts_v = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                            video_path = os.path.join(video_output_dir, f"{ts_v}_FAIL_id{gid}.mp4")
+                            try:
+                                frames_to_write = list(_video_frame_buffer)
+                                h_v, w_v = frames_to_write[0].shape[:2]
+                                fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+                                writer = cv2.VideoWriter(video_path, fourcc, video_buffer_fps, (w_v, h_v))
+                                for f_v in frames_to_write:
+                                    writer.write(f_v)
+                                writer.release()
+                            except Exception as e:
+                                print(f"[MonitoringService] ⚠ บันทึกวิดีโอ FAIL ไม่สำเร็จ: {e}")
+                                video_path = ""
                         self.crossing_event.emit({
                             "track_id":   gid,
                             "result":     result,
                             "mode":       sensitivity,
                             "image_path": img_path,
+                            "video_path": video_path,
                             "ts":         datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         })
 

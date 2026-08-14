@@ -7,8 +7,8 @@ from PyQt5.QtWidgets import (
     QLineEdit, QComboBox, QMessageBox, QFileDialog, QFrame,
     QTabWidget,
 )
-from PyQt5.QtCore  import Qt, pyqtSlot
-from PyQt5.QtGui   import QPixmap, QColor
+from PyQt5.QtCore  import Qt, pyqtSlot, QUrl
+from PyQt5.QtGui   import QPixmap, QColor, QDesktopServices
 
 from database.db_manager import DBManager
 
@@ -19,6 +19,7 @@ class HistoryPage(QWidget):
         self._cfg  = cfg
         self._db   = DBManager(cfg)
         self._rows: list[dict] = []
+        self._current_video_path = ""
         self._build_ui()
 
     def _build_ui(self):
@@ -74,7 +75,11 @@ class HistoryPage(QWidget):
         self._img_lbl.setMinimumHeight(240)
         self._img_info = QLabel(""); self._img_info.setAlignment(Qt.AlignCenter)
         self._img_info.setStyleSheet("color:#5A8ABF; font-size:11px;")
+        self._btn_play_video = QPushButton("▶  Play Video")
+        self._btn_play_video.setEnabled(False)
+        self._btn_play_video.clicked.connect(self._play_video)
         img_vbox.addWidget(self._img_lbl, stretch=1); img_vbox.addWidget(self._img_info)
+        img_vbox.addWidget(self._btn_play_video)
         splitter.addWidget(img_panel)
         splitter.setStretchFactor(0, 3); splitter.setStretchFactor(1, 1)
         db_layout.addWidget(splitter, stretch=1)
@@ -182,6 +187,23 @@ class HistoryPage(QWidget):
             self._img_info.setText(os.path.basename(path))
         else:
             self._img_lbl.setText("No image"); self._img_lbl.setPixmap(QPixmap()); self._img_info.setText("")
+        # เช็ค video_path จาก self._rows ตรงกับแถวที่เลือก
+        id_item = self._table.item(row, 0)
+        self._current_video_path = ""
+        if id_item:
+            try:
+                row_id = int(id_item.text())
+                matched = next((r for r in self._rows if r.get("id") == row_id), None)
+                if matched:
+                    self._current_video_path = matched.get("video_path", "")
+            except Exception:
+                pass
+        has_video = bool(self._current_video_path) and os.path.exists(self._current_video_path)
+        self._btn_play_video.setEnabled(has_video)
+
+    def _play_video(self):
+        if self._current_video_path and os.path.exists(self._current_video_path):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(self._current_video_path))
 
     @pyqtSlot()
     def _on_csv_select(self):

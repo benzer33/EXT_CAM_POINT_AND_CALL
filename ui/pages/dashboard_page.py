@@ -389,6 +389,7 @@ class DashboardPage(QWidget):
         result     = event["result"]
         mode       = event["mode"]
         image_path = event.get("image_path", "")
+        video_path = event.get("video_path", "")
         ts         = event.get("ts", "")
 
         self._db.log_crossing(
@@ -396,6 +397,7 @@ class DashboardPage(QWidget):
             result     = result,
             mode       = mode,
             image_path = image_path,
+            video_path = video_path,
         )
         self._notifier.notify(
             track_id   = track_id,

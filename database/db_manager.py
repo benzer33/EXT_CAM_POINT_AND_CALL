@@ -51,7 +51,8 @@ class DBManager:
                         track_id   INTEGER,
                         result     TEXT,
                         mode       TEXT,
-                        image_path TEXT
+                        image_path TEXT,
+                        video_path TEXT DEFAULT ''
                     )
                 """)
                 conn.execute(
@@ -59,6 +60,17 @@ class DBManager:
                 )
                 conn.commit()
                 conn.close()
+            # migration: เพิ่ม video_path ให้ database เดิมที่ยังไม่มี column นี้
+            try:
+                conn = self._connect()
+                cur = conn.execute("PRAGMA table_info(crossing_events)")
+                cols = [row[1] for row in cur.fetchall()]
+                if "video_path" not in cols:
+                    conn.execute("ALTER TABLE crossing_events ADD COLUMN video_path TEXT DEFAULT ''")
+                    conn.commit()
+                conn.close()
+            except Exception as e:
+                print(f"[DB] Migration warning: {e}")
             self._ok = True
             print(f"[DB] SQLite พร้อม → {self._db_path}")
             return True
@@ -67,16 +79,16 @@ class DBManager:
             return False
 
     def log_crossing(self, track_id: int, result: str, mode: str,
-                     image_path: str = "") -> None:
+                     image_path: str = "", video_path: str = "") -> None:
         """Insert บันทึกใน background thread (non-blocking)."""
         def _insert():
             try:
                 with self._lock:
                     conn = self._connect()
                     conn.execute(
-                        "INSERT INTO crossing_events (track_id, result, mode, image_path) "
-                        "VALUES (?, ?, ?, ?)",
-                        (track_id, result, mode, image_path),
+                        "INSERT INTO crossing_events (track_id, result, mode, image_path, video_path) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (track_id, result, mode, image_path, video_path),
                     )
                     conn.commit()
                     conn.close()
@@ -90,7 +102,7 @@ class DBManager:
             with self._lock:
                 conn = self._connect()
                 cur  = conn.execute(
-                    "SELECT id, ts, track_id, result, mode, image_path "
+                    "SELECT id, ts, track_id, result, mode, image_path, video_path "
                     "FROM crossing_events ORDER BY id DESC LIMIT ?",
                     (limit,),
                 )

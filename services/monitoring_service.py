@@ -2,7 +2,7 @@
 MonitoringService — QThread detection pipeline.
 """
 from __future__ import annotations
-import os, time, cv2, numpy as np
+import os, time, cv2, numpy as np, threading
 from collections import deque
 from datetime import datetime
 
@@ -473,17 +473,12 @@ class MonitoringService(QThread):
                         if save_video_on_fail and result == "FAIL" and len(_video_frame_buffer) >= 2:
                             ts_v = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
                             video_path = os.path.join(video_output_dir, f"{ts_v}_FAIL_id{gid}.mp4")
-                            try:
-                                frames_to_write = list(_video_frame_buffer)
-                                h_v, w_v = frames_to_write[0].shape[:2]
-                                fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-                                writer = cv2.VideoWriter(video_path, fourcc, video_buffer_fps, (w_v, h_v))
-                                for f_v in frames_to_write:
-                                    writer.write(f_v)
-                                writer.release()
-                            except Exception as e:
-                                print(f"[MonitoringService] ⚠ บันทึกวิดีโอ FAIL ไม่สำเร็จ: {e}")
-                                video_path = ""
+                            frames_to_write = list(_video_frame_buffer)
+                            threading.Thread(
+                                target=_write_video_worker,
+                                args=(frames_to_write, video_path, video_buffer_fps),
+                                daemon=True,
+                            ).start()
                         self.crossing_event.emit({
                             "track_id":   gid,
                             "result":     result,
@@ -640,6 +635,25 @@ def _save_capture(frame, bbox, track_id: int, result: str, capture_dir: str,
         return path
     except Exception:
         return ""
+
+
+def _write_video_worker(frames: list, path: str, fps: int):
+    """
+    เขียนไฟล์วิดีโอในเธรดแยก ไม่บล็อก main monitoring loop
+    frames ต้องเป็น list ของ numpy array ที่ copy มาแล้ว (ปลอดภัยจาก race condition
+    เพราะไม่มีการแก้ไข frame เหล่านี้จากเธรดอื่นพร้อมกัน)
+    """
+    try:
+        if not frames:
+            return
+        h_v, w_v = frames[0].shape[:2]
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        writer = cv2.VideoWriter(path, fourcc, fps, (w_v, h_v))
+        for f in frames:
+            writer.write(f)
+        writer.release()
+    except Exception as e:
+        print(f"[MonitoringService] ⚠ บันทึกวิดีโอ FAIL ไม่สำเร็จ (background): {e}")
 
 
 def _find_matching_pending_exit(bbox, pending_exits: dict,
